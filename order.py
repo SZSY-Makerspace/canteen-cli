@@ -27,7 +27,7 @@ for cookies in cookie:
         evil_jsessionid = cookies.value
 login_post_url = login_post_url.format(evil_jsessionid)
 # https://docs.python.org/3/library/stdtypes.html#str.format
-# 说真的，上面那步没啥必要。不过，模拟得尽量逼真点吧
+# 说真的，上面那步没啥必要。不过，尽量模拟得逼真点吧
 
 not_logined = True
 while not_logined:
@@ -35,7 +35,7 @@ while not_logined:
     if (len(str(student_id)) == 7):
         pass
     else:
-        print('请输入长度为7为数字的学号')
+        print('请输入长度为7位数字的学号')
         continue
     password = input('请输入密码：')
 
@@ -92,7 +92,7 @@ while True:
 
     if date in date_item:
         pass
-    else:  # 若输入的日期不在，向服务器查询输入的月份
+    else:  # 若输入的日期不存在，向服务器查询输入的月份
         evil_viewstate = date_tree.xpath('//*[@id="__VIEWSTATE"]/@value')[0]
         evil_eventvalidation = date_tree.xpath('//*[@id="__EVENTVALIDATION"]/@value')[0]
         # They are evil, aren't they?
