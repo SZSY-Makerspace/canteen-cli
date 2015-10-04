@@ -1,0 +1,2 @@
+This is a Python 3 program that makes use of lxml and XPath, to order food at the "One Card" System of Shenzhen Experimental School (Senior Section). It aims to be the reference implementation for further projects.
+It's poorly written. Please blame.
