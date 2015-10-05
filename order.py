@@ -74,7 +74,7 @@ while True:
     date_splited = date.split('-')
     # 统一宽度。这样就能够处理2015-9-3这种“格式错误”的日期了
     date = '{0}-{1}-{2}'.format(date_splited[0].zfill(4), date_splited[1].zfill(2), date_splited[2].zfill(2))
-    datetime.datetime(int(date_splited[0]), int(date_splited[1]), int(date_splited[2]))  # 首先，确认它是个正确的日期
+    date_object = datetime.datetime(int(date_splited[0]), int(date_splited[1]), int(date_splited[2]))  # 首先，确认它是个正确的日期
 
     # 第一次访问选择日期的页面，若输入的日期存在，便去打印菜单。
     headers['Referer'] = 'http://gzb.szsy.cn/card/Default.aspx'  # 更新Referer
@@ -154,6 +154,8 @@ while True:
     menu_parsed = {}  # 由于Python中没有多维数组，而我嫌初始化一个"list of list of list"太麻烦，故使用一个字典，(餐次, 编号, 列数) = '原表格内容'
     course_amount = {}  # (餐次, 编号) = 数量
     callbackparam = ''  # 用于提交的菜单参数
+    
+    print('{0}，星期{1}'.format(date, date_object.isoweekday()))
     for meal_order in range(0, menu_count):  # 这是个半闭半开的区间[a,b)，且GvReport是从0开始编号的，故这样
         xpath_exp = '//table[@id="Repeater1_GvReport_{0}"]/tr/td//text()'.format(meal_order)
         menu_item = menu_tree.xpath(xpath_exp)
