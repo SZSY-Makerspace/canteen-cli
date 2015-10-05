@@ -72,8 +72,8 @@ while True:
     # 检查日期
     date = input('\n请输入日期（格式如：2015-09-30）：')
     date_splited = date.split('-')
-    date = '{0}-{1}-{2}'.format(date_splited[0].zfill(4), date_splited[1].zfill(2), date_splited[2].zfill(2))
     # 统一宽度。这样就能够处理2015-9-3这种“格式错误”的日期了
+    date = '{0}-{1}-{2}'.format(date_splited[0].zfill(4), date_splited[1].zfill(2), date_splited[2].zfill(2))
     datetime.datetime(int(date_splited[0]), int(date_splited[1]), int(date_splited[2]))  # 首先，确认它是个正确的日期
 
     # 第一次访问选择日期的页面，若输入的日期存在，便去打印菜单。
@@ -141,7 +141,9 @@ while True:
     menu = opener.open(menu_request)
 
     # 我也是被逼的……如果不这么干，lxml提取出的列表里会有那串空白，且还不能用lxml.html.clean去掉
+    # 看起来lxml不会自动去掉空格
     menu_tidied = re.sub(r'\r\n {24}( {4})?', '', menu.read().decode('utf-8'))
+    menu_tidied = menu_tidied.replace('&nbsp;', ' ')  # 避免在Windows下出现问题，GBK中没有\xa0
     menu_tree = html.fromstring(menu_tidied)
 
     # 没办法，不同页面的这两个值都不一样
@@ -178,7 +180,7 @@ while True:
                 print()  # 换行打印
 
         # 修改菜单
-        if (menu_parsed[meal_order, 9, 3] == '\xa0'):  # 参考reference.txt附上的两份菜单，just a dirty trick
+        if (menu_parsed[meal_order, 9, 3] == ' '):  # 参考reference.txt附上的两份菜单，just a dirty trick
             print('菜单无法更改')
             menu_mutable = False
             continue
@@ -239,3 +241,5 @@ while True:
             print('\n订餐成功')
         else:
             print('\n订餐失败')
+
+    menu_url = 'http://gzb.szsy.cn/card/Restaurant/RestaurantUserMenu/RestaurantUserMenu.aspx?Date={0}'  # 重新赋值
