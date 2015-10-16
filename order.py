@@ -67,6 +67,10 @@ while not_logined:
 headers['Referer'] = 'http://gzb.szsy.cn:4000/lcconsole/login!getSSOMessage.action'  # 更新Referer
 order_login_request = request.Request(order_login_url, None, headers)
 order_login = opener.open(order_login_request)
+order_welcome_page = order_login.read().decode('utf-8')  # 此处会302到欢迎页
+student_name = re.search(r'<span id="LblUserName">当前用户：(.*?)<\/span>', order_welcome_page).group(1)
+# 我觉得为了一个只用一次的页面开一棵DOM Tree太浪费了，用正则省事
+print("欢迎，{0}".format(student_name))
 
 while True:
     # 检查日期
