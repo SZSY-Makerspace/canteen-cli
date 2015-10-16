@@ -16,7 +16,7 @@ login_page_url = 'http://gzb.szsy.cn:3000/cas/login'
 login_post_url = 'http://gzb.szsy.cn:3000/cas/login;jsessionid={0}'  # Skeleton
 order_login_url = 'http://gzb.szsy.cn/card/'
 select_date_url = 'http://gzb.szsy.cn/card/Restaurant/RestaurantUserMenu/RestaurantUserSelect.aspx'
-menu_url = 'http://gzb.szsy.cn/card/Restaurant/RestaurantUserMenu/RestaurantUserMenu.aspx?Date={0}'  # Skeleton
+menu_page_url = 'http://gzb.szsy.cn/card/Restaurant/RestaurantUserMenu/RestaurantUserMenu.aspx?Date={0}'  # Skeleton
 
 # 获得JSESSIONID
 login_page_request = request.Request(login_page_url, None, headers)
@@ -135,8 +135,8 @@ while True:
             continue
 
     # 拉菜单
-    menu_url = menu_url.format(date)
-    menu_request = request.Request(menu_url, None, headers)
+    menu_page_url = menu_page_url.format(date)
+    menu_request = request.Request(menu_page_url, None, headers)
     print('正在获取菜单')
     menu = opener.open(menu_request)
 
@@ -234,8 +234,8 @@ while True:
             '__EVENTVALIDATION': evil_eventvalidation
         }
         post_menu_form = parse.urlencode(menu_form).encode('utf-8')
-        headers['Referer'] = menu_url  # 更新Referer，拉菜单前已经拼好了
-        submit_menu_request = request.Request(menu_url, post_menu_form, headers)
+        headers['Referer'] = menu_page_url  # 更新Referer，拉菜单前已经拼好了
+        submit_menu_request = request.Request(menu_page_url, post_menu_form, headers)
         print('\n正在提交菜单')
         submit_menu = opener.open(submit_menu_request)
 
@@ -244,4 +244,4 @@ while True:
         else:
             print('\n订餐失败')
 
-    menu_url = 'http://gzb.szsy.cn/card/Restaurant/RestaurantUserMenu/RestaurantUserMenu.aspx?Date={0}'  # 重新赋值
+    menu_page_url = 'http://gzb.szsy.cn/card/Restaurant/RestaurantUserMenu/RestaurantUserMenu.aspx?Date={0}'  # 重新赋值
