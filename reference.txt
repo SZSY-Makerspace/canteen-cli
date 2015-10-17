@@ -54,3 +54,50 @@ Menu in 2015-10-08 (Mutable):
 
 An example of __CALLBACKPARAM:
 Repeater1_GvReport_0_TxtNum_0@0|Repeater1_GvReport_0_TxtNum_1@0|Repeater1_GvReport_0_TxtNum_2@0|Repeater1_GvReport_0_TxtNum_3@1|Repeater1_GvReport_0_TxtNum_4@0|Repeater1_GvReport_0_TxtNum_5@0|Repeater1_GvReport_0_TxtNum_6@0|Repeater1_GvReport_0_TxtNum_7@1|Repeater1_GvReport_0_TxtNum_8@1|Repeater1_GvReport_1_TxtNum_0@0|Repeater1_GvReport_1_TxtNum_1@0|Repeater1_GvReport_1_TxtNum_2@1|Repeater1_GvReport_1_TxtNum_3@0|Repeater1_GvReport_1_TxtNum_4@0|Repeater1_GvReport_1_TxtNum_5@0|Repeater1_GvReport_1_TxtNum_6@1|Repeater1_GvReport_1_TxtNum_7@0|Repeater1_GvReport_1_TxtNum_8@1|Repeater1_GvReport_2_TxtNum_0@0|Repeater1_GvReport_2_TxtNum_1@0|Repeater1_GvReport_2_TxtNum_2@0|Repeater1_GvReport_2_TxtNum_3@0|Repeater1_GvReport_2_TxtNum_4@0|Repeater1_GvReport_2_TxtNum_5@0|Repeater1_GvReport_2_TxtNum_6@0|Repeater1_GvReport_2_TxtNum_7@0|Repeater1_GvReport_2_TxtNum_8@0|
+
+An example of the login success page:
+<SCRIPT LANGUAGE="JavaScript">
+<!--
+	window.location.href="http://gzb.szsy.cn:4000/lcconsole/";
+//-->
+</SCRIPT>
+
+
+
+
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+	<head>
+	    <title>统一身份认证系统 - Power By LCSOFT</title>
+        
+           
+           
+                <link type="text/css" rel="stylesheet" href="css/cas.css" />
+                <script type="text/javascript" src="js/common_rosters.js"></script>
+           
+        
+	    <link rel="icon" href="/cas/favicon.ico" type="image/x-icon" />
+	</head>
+	<body onload="init();">
+
+		<div id="msg" class="success">
+			<h2>登录成功</h2>
+			<p>您已经成功登录中央认证系统。</p>
+			<p>出于安全考虑，一旦您访问过那些需要您提供凭证信息的应用时，请操作完成之后关闭浏览器。</p>
+		</div>
+                </div>
+                <div id="footer" class="fl-panel fl-note fl-bevel-white fl-font-size-80">
+                    <div>
+                        <p>Copyright &copy; 2009 - 2010 LCOSFT, Inc. All rights reserved.</p>
+                        <p>Powered by <a href="http://www.szlcsoft.com">LCSOFT Central Authentication Service(LCSSO) V2.0</a></p>
+                    </div>
+                    <a href="http://www.szlcsoft.com" title="go to Jasig home page"><img id="logo" src="images/ja-sig-logo.gif" width="118" height="31" alt="JA-SIG" title="go to SZLCSOFT home page" /></a>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

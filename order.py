@@ -22,15 +22,12 @@ menu_page_url = 'http://gzb.szsy.cn/card/Restaurant/RestaurantUserMenu/Restauran
 login_page_request = request.Request(login_page_url, None, headers)
 print('正在初始化')
 login_page = opener.open(login_page_request)
-for cookies in cookie:
-    if (cookies.name == 'JSESSIONID'):
-        evil_jsessionid = cookies.value
+evil_jsessionid = re.search(r'jsessionid=(.*?)"', login_page.read().decode('utf-8')).group(1)
 login_post_url = login_post_url.format(evil_jsessionid)
 # https://docs.python.org/3/library/stdtypes.html#str.format
 # 说真的，上面那步没啥必要。不过，尽量模拟得逼真点吧
 
-not_logined = True
-while not_logined:
+while True:
     student_id = int(input('\n请输入学号：'))
     if (len(str(student_id)) == 7):
         pass
@@ -54,14 +51,15 @@ while not_logined:
     auth_request = request.Request(login_post_url, login_post_form, headers)
     auth = opener.open(auth_request)
 
-    # 以Cookie是否存在判断登录是否成功
-    for cookies in cookie:
-        if (cookies.name == 'CASTGC'):
-            not_logined = False
-            break
-        else:
-            print('登录失败，请检查学号和密码是否正确')
-            continue
+    # 以是否存在跳转页面的特征判断登录是否成功
+    auth_page = auth.read().decode('utf-8')
+    auth_status = re.match('<SCRIPT LANGUAGE="JavaScript">', auth_page)
+
+    if auth_status == None:  # 若登录失败，由于被重定向回登陆页，上面正则会返回None
+        print('登录失败，请检查学号和密码是否正确')
+        continue
+    else:
+        break
 
 # 登录校卡系统
 headers['Referer'] = 'http://gzb.szsy.cn:4000/lcconsole/login!getSSOMessage.action'  # 更新Referer
