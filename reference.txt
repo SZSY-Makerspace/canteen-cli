@@ -1,4 +1,4 @@
-Menu in 2015-09-30 (Immutable):
+Menu on 2015-09-30 (Immutable):
 ['0', '套餐', '早餐套餐', '套餐', ' ', '4.00', '1', '0', ' ',
  '1', '牛奶', '学生奶', ' ', ' ', '2.04', '3', '0', ' ',
  '2', '蛋类', '鲜鸡蛋', ' ', ' ', '1.20', '3', '0', ' ',
@@ -20,7 +20,7 @@ Menu in 2015-09-30 (Immutable):
  '9', '必订菜', '午餐必订菜(米饭汤)', ' ', '必选', '1.50', '1', '1', '已定',
  ' ', ' ', ' ', ' ', '合计:', '7.30', '0', '0', ' ']
 
-Menu in 2015-10-08 (Mutable):
+Menu on 2015-10-08 (Mutable):
 ['0', '套餐', '早餐套餐', '套餐', ' ', '4.00', '1', '0', ' ',
  '1', '牛奶', '学生奶', ' ', ' ', '2.04', '3', '0', ' ',
  '2', '蛋类', '鲜鸡蛋', ' ', ' ', '1.20', '3', '0', ' ',
@@ -51,6 +51,18 @@ Menu in 2015-10-08 (Mutable):
  '7', '净荤菜', '香酥鸡翅', ' ', ' ', '5.50', '3', '0', ' ',
  '9', '必订菜', '午晚餐必订菜（米饭汤）', ' ', '必选', '1.50', '1', '1', '已定',
  ' ', ' ', ' ', '合计:', '4.50', ' ']
+
+Special lunch menu on 2015-11-04:
+['1', '必订菜', '午餐必订菜(米饭汤)', ' ', '必选', '1.50', '1', '1', '已定',
+ '2', '套餐', '午餐套餐', '套餐', ' ', '10.00', '1', '0', ' ',
+ '3', '水果', '苹果', ' ', ' ', '1.10', '3', '0', ' ',
+ '4', '素菜', '蒜茸炒芥菜', ' ', ' ', '1.50', '3', '1', '已定',
+ '5', '素菜', '炒绿豆芽', ' ', ' ', '1.50', '3', '0', ' ',
+ '6', '荤菜', '芽菜扣肉', ' ', ' ', '4.70', '3', '0', ' ',
+ '7', '荤菜', '红烧茄子', ' ', ' ', '3.10', '3', '1', '已定',
+ '8', '荤菜', '三鲜豆腐', ' ', ' ', '3.10', '3', '1', '已定',
+ '9', '净荤菜', '无锡排骨', ' ', ' ', '9.80', '3', '0', ' ',
+ ' ', ' ', ' ', '合计:', '9.20', ' ']
 
 An example of __CALLBACKPARAM:
 Repeater1_GvReport_0_TxtNum_0@0|Repeater1_GvReport_0_TxtNum_1@0|Repeater1_GvReport_0_TxtNum_2@0|Repeater1_GvReport_0_TxtNum_3@1|Repeater1_GvReport_0_TxtNum_4@0|Repeater1_GvReport_0_TxtNum_5@0|Repeater1_GvReport_0_TxtNum_6@0|Repeater1_GvReport_0_TxtNum_7@1|Repeater1_GvReport_0_TxtNum_8@1|Repeater1_GvReport_1_TxtNum_0@0|Repeater1_GvReport_1_TxtNum_1@0|Repeater1_GvReport_1_TxtNum_2@1|Repeater1_GvReport_1_TxtNum_3@0|Repeater1_GvReport_1_TxtNum_4@0|Repeater1_GvReport_1_TxtNum_5@0|Repeater1_GvReport_1_TxtNum_6@1|Repeater1_GvReport_1_TxtNum_7@0|Repeater1_GvReport_1_TxtNum_8@1|Repeater1_GvReport_2_TxtNum_0@0|Repeater1_GvReport_2_TxtNum_1@0|Repeater1_GvReport_2_TxtNum_2@0|Repeater1_GvReport_2_TxtNum_3@0|Repeater1_GvReport_2_TxtNum_4@0|Repeater1_GvReport_2_TxtNum_5@0|Repeater1_GvReport_2_TxtNum_6@0|Repeater1_GvReport_2_TxtNum_7@0|Repeater1_GvReport_2_TxtNum_8@0|

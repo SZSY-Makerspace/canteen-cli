@@ -156,7 +156,7 @@ while True:
     menu_parsed = {}  # 由于Python中没有多维数组，而我嫌初始化一个"list of list of list"太麻烦，故使用一个字典，(餐次, 编号, 列数) = '原表格内容'
     course_amount = {}  # (餐次, 编号) = 数量
     callbackparam = ''  # 用于提交的菜单参数
-    
+
     print('{0}，星期{1}'.format(date, date_object.isoweekday()))
     for meal_order in range(0, menu_count):  # 这是个半闭半开的区间[a,b)，且GvReport是从0开始编号的，故这样
         xpath_exp = '//table[@id="Repeater1_GvReport_{0}"]/tr/td//text()'.format(meal_order)
@@ -176,6 +176,11 @@ while True:
         for item in menu_item:
             print(item, end='\t')  # 这样就不会换行了，以制表符分隔元素
             menu_parsed[meal_order, row, column] = item
+
+            if column == 4:
+                if item == '必选':
+                    required_course = row  # 用于记录必选菜的编号，以处理必选菜不在最后的特殊情况
+
             i += 1
             column += 1
             if (i % 9 == 0):
@@ -191,13 +196,13 @@ while True:
         elif (menu_parsed[meal_order, 9, 3] == '合计:'):
             print('\n菜单可更改')  # 如果菜单是可以提交的，那么最后一行会少3列。一般每行有9列。故在此插入换行符，以取得较统一的效果
             menu_mutable = True
-            for course in range(0, 7+1):  # course n. a part of a meal served at one time
+            for course in range(0, 8+1):  # course n. a part of a meal served at one time
                 print('\n编号：{0} 菜名：{1} 单价：{2} 最大份数：{3}'.format(
                     menu_parsed[meal_order, course, 0],
                     menu_parsed[meal_order, course, 2],
                     menu_parsed[meal_order, course, 5],
                     menu_parsed[meal_order, course, 6]))
-                while True:
+                while course != required_course:
                     course_num = int(input('请输入您要点的份数：'))
                     if (0 <= course_num <= int(menu_parsed[meal_order, course, 6])):
                         course_amount[meal_order, course] = course_num  # 将份数放入字典
@@ -206,20 +211,14 @@ while True:
                         print('请输入一个大于等于0且小于等于{0}的整数'.format(
                             menu_parsed[meal_order, course, 6]))
                         continue
-            print('\n编号：{0} 菜名：{1} 单价：{2}'.format(  # 必选菜，当然特殊处理
-                menu_parsed[meal_order, 8, 0],
-                menu_parsed[meal_order, 8, 2],
-                menu_parsed[meal_order, 8, 5]))
+                course_amount[meal_order, required_course] = 1  # 放入必选菜
 
-            for course in range(0, 7+1):
+            for course in range(0, 8+1):
                 callbackparam = '{0}Repeater1_GvReport_{1}_TxtNum_{2}@{3}|'.format(
                     callbackparam,  # 拼起来
                     meal_order,
                     course,
                     course_amount[meal_order, course])
-            callbackparam = '{0}Repeater1_GvReport_{1}_TxtNum_8@1|'.format(  # 拼入必选菜
-                callbackparam,
-                meal_order)
 
     # 想不出别的用来处理不可修改的菜单的方法，只好声明一个menu_mutable了
     if menu_mutable:
