@@ -69,6 +69,8 @@ order_welcome_page = order_login.read().decode('utf-8')  # 此处会302到欢迎
 student_name = re.search(r'<span id="LblUserName">当前用户：(.*?)<\/span>', order_welcome_page).group(1)
 # 我觉得为了一个只用一次的页面开一棵DOM Tree太浪费了，用正则省事
 print("欢迎，{0}".format(student_name))
+print("理论上说，现在能够订到", datetime.timedelta(3 + 1) + datetime.date.today(), "及以后的餐")
+# 说的是“72小时”，实际上是把那一整天排除了，故+1
 
 while True:
     # 检查日期
