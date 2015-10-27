@@ -5,6 +5,15 @@ import re
 import datetime
 from lxml import etree, html
 
+def tidy_date_list(tree):   
+    raw_date_list = tree.xpath('//a[@target="RestaurantContent"]/@href')
+
+    i = 0
+    for item in raw_date_list:
+        raw_date_list[i] = item.replace('RestaurantUserMenu.aspx?Date=', '')
+        i += 1
+    return raw_date_list
+
 print('深圳实验学校高中部网上订餐系统CLI客户端')
 cookie = cookiejar.CookieJar()
 opener = request.build_opener(request.HTTPCookieProcessor(cookie))
@@ -86,15 +95,10 @@ while True:
     print('正在检查日期 Stage1')
     check_date_first = opener.open(check_date_first_request)
     date_tree = html.fromstring(check_date_first.read().decode('utf-8'))
-    date_item = date_tree.xpath('//a[@target="RestaurantContent"]/@href')
 
-    # 整理date_item[]
-    i = 0
-    for item in date_item:
-        date_item[i] = item.replace('RestaurantUserMenu.aspx?Date=', '')
-        i += 1
+    date_list = tidy_date_list(date_tree)
 
-    if date in date_item:
+    if date in date_list:
         pass
     else:  # 若输入的日期不存在，向服务器查询输入的月份
         evil_viewstate = date_tree.xpath('//*[@id="__VIEWSTATE"]/@value')[0]
@@ -120,20 +124,16 @@ while True:
         date_tree = html.fromstring(check_date_second.read().decode('utf-8'))
         date_item = date_tree.xpath('//a[@target="RestaurantContent"]/@href')
 
-        # 整理date_item[]
-        i = 0
-        for item in date_item:
-            date_item[i] = item.replace('RestaurantUserMenu.aspx?Date=', '')
-            i += 1
+        date_list = tidy_date_list(date_tree)
 
-        if len(date_item) == 0:
+        if len(date_list) == 0:
             print('月份内没有可以点餐的日期')
             continue
-        elif date in date_item:
+        elif date in date_list:
             pass
         else:
             print('请输入')
-            for item in date_item:
+            for item in date_list:
                 print(item)
             print('中的日期')
             continue
