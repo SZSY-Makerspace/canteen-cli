@@ -5,7 +5,8 @@ import re
 import datetime
 from lxml import etree, html
 
-def tidy_date_list(tree):   
+def tidy_date_list(tree):
+    # 用来解析一棵树，得到可订餐的日期列表
     raw_date_list = tree.xpath('//a[@target="RestaurantContent"]/@href')
 
     i = 0
@@ -147,7 +148,7 @@ while True:
     # 我也是被逼的……如果不这么干，lxml提取出的列表里会有那串空白，且还不能用lxml.html.clean去掉
     # 看起来lxml不会自动去掉空格
     menu_tidied = re.sub(r'\r\n {24}( {4})?', '', menu.read().decode('utf-8'))
-    menu_tidied = menu_tidied.replace('&nbsp;', ' ')  # 避免在Windows下出现问题，GBK中没有\xa0
+    menu_tidied = menu_tidied.replace('&nbsp;', ' ')  # 避免在Windows下出现编码问题，GBK中没有\xa0
     menu_tree = html.fromstring(menu_tidied)
 
     # 没办法，不同页面的这两个值都不一样
