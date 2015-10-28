@@ -1,8 +1,7 @@
 #!/usr/bin/env python
-from urllib import parse, request
-from http import cookiejar
 import re
 import datetime
+import requests
 from lxml import etree, html
 
 def tidy_date_list(tree):
@@ -16,11 +15,10 @@ def tidy_date_list(tree):
     return raw_date_list
 
 print('深圳实验学校高中部网上订餐系统CLI客户端')
-cookie = cookiejar.CookieJar()
-opener = request.build_opener(request.HTTPCookieProcessor(cookie))
 headers = {
     'User-Agent': 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; Trident/7.0)'  # 伪装成Windows 7 IE 11（兼容性视图）
 }
+opener = requests.Session()
 
 login_page_url = 'http://gzb.szsy.cn:3000/cas/login'
 login_post_url = 'http://gzb.szsy.cn:3000/cas/login;jsessionid={0}'  # Skeleton
@@ -29,10 +27,9 @@ select_date_url = 'http://gzb.szsy.cn/card/Restaurant/RestaurantUserMenu/Restaur
 menu_page_url = 'http://gzb.szsy.cn/card/Restaurant/RestaurantUserMenu/RestaurantUserMenu.aspx?Date={0}'  # Skeleton
 
 # 获得JSESSIONID
-login_page_request = request.Request(login_page_url, None, headers)
 print('正在初始化')
-login_page = opener.open(login_page_request)
-evil_jsessionid = re.search(r'jsessionid=(.*?)"', login_page.read().decode('utf-8')).group(1)
+login_page = opener.get(login_page_url, headers = headers)
+evil_jsessionid = re.search(r'jsessionid=(.*?)"', login_page.text).group(1)
 login_post_url = login_post_url.format(evil_jsessionid)
 # https://docs.python.org/3/library/stdtypes.html#str.format
 # 说真的，上面那步没啥必要。不过，尽量模拟得逼真点吧
@@ -57,13 +54,10 @@ while True:
     print('正在登录')
     # 登录（SSO）
     headers.update({'Referer': login_page_url})  # 添加Referer
-    login_post_form = parse.urlencode(login_form).encode('utf-8')
-    auth_request = request.Request(login_post_url, login_post_form, headers)
-    auth = opener.open(auth_request)
+    auth = opener.post(login_post_url, data = login_form, headers = headers)
 
     # 以是否存在跳转页面的特征判断登录是否成功
-    auth_page = auth.read().decode('utf-8')
-    auth_status = re.match('<SCRIPT LANGUAGE="JavaScript">', auth_page)
+    auth_status = re.match('<SCRIPT LANGUAGE="JavaScript">', auth.text)
 
     if auth_status == None:  # 若登录失败，由于被重定向回登陆页，上面正则会返回None
         print('登录失败，请检查学号和密码是否正确')
@@ -73,9 +67,8 @@ while True:
 
 # 登录校卡系统
 headers['Referer'] = 'http://gzb.szsy.cn:4000/lcconsole/login!getSSOMessage.action'  # 更新Referer
-order_login_request = request.Request(order_login_url, None, headers)
-order_login = opener.open(order_login_request)
-order_welcome_page = order_login.read().decode('utf-8')  # 此处会302到欢迎页
+order_login = opener.get(order_login_url, headers = headers)
+order_welcome_page = order_login.text  # 此处会302到欢迎页
 student_name = re.search(r'<span id="LblUserName">当前用户：(.*?)<\/span>', order_welcome_page).group(1)
 # 我觉得为了一个只用一次的页面开一棵DOM Tree太浪费了，用正则省事
 print("欢迎，{0}".format(student_name))
@@ -92,10 +85,9 @@ while True:
 
     # 第一次访问选择日期的页面，若输入的日期存在，便去打印菜单。
     headers['Referer'] = 'http://gzb.szsy.cn/card/Default.aspx'  # 更新Referer
-    check_date_first_request = request.Request(select_date_url, None, headers)
     print('正在检查日期 Stage1')
-    check_date_first = opener.open(check_date_first_request)
-    date_tree = html.fromstring(check_date_first.read().decode('utf-8'))
+    check_date_first = opener.get(select_date_url, headers = headers)
+    date_tree = html.fromstring(check_date_first.text)
 
     date_list = tidy_date_list(date_tree)
 
@@ -118,11 +110,9 @@ while True:
         }
 
         headers['Referer'] = select_date_url  # 更新Referer
-        check_date_second_post_form = parse.urlencode(check_date_second_form).encode('utf-8')
-        check_date_second_request = request.Request(select_date_url, check_date_second_post_form, headers)
         print('正在检查日期 Stage2')
-        check_date_second = opener.open(check_date_second_request)
-        date_tree = html.fromstring(check_date_second.read().decode('utf-8'))
+        check_date_second = opener.post(select_date_url, data = check_date_second_form, headers = headers)
+        date_tree = html.fromstring(check_date_second.text)
         date_item = date_tree.xpath('//a[@target="RestaurantContent"]/@href')
 
         date_list = tidy_date_list(date_tree)
@@ -141,13 +131,12 @@ while True:
 
     # 拉菜单
     menu_page_url = menu_page_url.format(date)
-    menu_request = request.Request(menu_page_url, None, headers)
     print('正在获取菜单')
-    menu = opener.open(menu_request)
+    menu = opener.get(menu_page_url, headers = headers)
 
     # 我也是被逼的……如果不这么干，lxml提取出的列表里会有那串空白，且还不能用lxml.html.clean去掉
     # 看起来lxml不会自动去掉空格
-    menu_tidied = re.sub(r'\r\n {24}( {4})?', '', menu.read().decode('utf-8'))
+    menu_tidied = re.sub(r'\r\n {24}( {4})?', '', menu.text)
     menu_tidied = menu_tidied.replace('&nbsp;', ' ')  # 避免在Windows下出现编码问题，GBK中没有\xa0
     menu_tree = html.fromstring(menu_tidied)
 
@@ -237,13 +226,11 @@ while True:
             '__CALLBACKPARAM': callbackparam,
             '__EVENTVALIDATION': evil_eventvalidation
         }
-        post_menu_form = parse.urlencode(menu_form).encode('utf-8')
         headers['Referer'] = menu_page_url  # 更新Referer，拉菜单前已经拼好了
-        submit_menu_request = request.Request(menu_page_url, post_menu_form, headers)
         print('\n正在提交菜单')
-        submit_menu = opener.open(submit_menu_request)
+        submit_menu = opener.post(menu_page_url, menu_form, headers = headers)
 
-        if '订餐成功！' in submit_menu.read().decode('utf-8'):
+        if '订餐成功！' in submit_menu.text:
             print('\n订餐成功')
         else:
             print('\n订餐失败')
