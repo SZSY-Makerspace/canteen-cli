@@ -6,13 +6,13 @@ from lxml import etree, html
 
 def tidy_date_list(tree):
     # 用来解析一棵树，得到可订餐的日期列表
-    raw_date_list = tree.xpath('//a[@target="RestaurantContent"]/@href')
+    date_list = tree.xpath('//a[@target="RestaurantContent"]/@href')
 
     i = 0
-    for item in raw_date_list:
-        raw_date_list[i] = item.replace('RestaurantUserMenu.aspx?Date=', '')
+    for item in date_list:
+        date_list[i] = item.replace('RestaurantUserMenu.aspx?Date=', '')
         i += 1
-    return raw_date_list
+    return date_list
 
 print('深圳实验学校高中部网上订餐系统CLI客户端')
 headers = {
