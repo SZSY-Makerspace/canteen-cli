@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import re
 import datetime
+from getpass import getpass
 import requests
 from lxml import etree, html
 
@@ -41,7 +42,8 @@ while True:
     else:
         print('请输入长度为7位数字的学号')
         continue
-    password = input('请输入密码：')
+    print('是的，你在输密码的时候不会出现*，输完按Enter即可')
+    password = getpass('请输入密码：')
 
     login_form = {
         'username': student_id,
