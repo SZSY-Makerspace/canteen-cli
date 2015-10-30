@@ -55,7 +55,7 @@ while True:
 
     print('正在登录')
     # 登录（SSO）
-    headers.update({'Referer': login_page_url})  # 添加Referer
+    headers['Referer'] = login_page_url  # 添加Referer
     auth = opener.post(login_post_url, data = login_form, headers = headers)
 
     # 以是否存在跳转页面的特征判断登录是否成功
@@ -150,6 +150,17 @@ while True:
     menu_parsed = {}  # 由于Python中没有多维数组，而我嫌初始化一个"list of list of list"太麻烦，故使用一个字典，(餐次, 编号, 列数) = '原表格内容'
     course_amount = {}  # (餐次, 编号) = 数量
     callbackparam = ''  # 用于提交的菜单参数
+    # 制作用于提交的表单
+    menu_form = {
+        '__EVENTTARGET': '',
+        '__EVENTARGUMENT': '',
+        '__LASTFOCUS': '',
+        '__VIEWSTATE': evil_viewstate,
+        '__VIEWSTATEENCRYPTED': '',
+        'DrplstRestaurantBasis1$DrplstControl': '4d05282b-b96f-4a3f-ba54-fc218266a524',  # 页面上“选择餐厅”的值
+        '__CALLBACKID': '__Page',
+        '__EVENTVALIDATION': evil_eventvalidation
+    }
 
     print('{0}，星期{1}'.format(date, date_object.isoweekday()))
     for meal_order in range(0, menu_count):  # 这是个半闭半开的区间[a,b)，且GvReport是从0开始编号的，故这样
@@ -190,44 +201,49 @@ while True:
         elif (menu_parsed[meal_order, 9, 3] == '合计:'):
             print('\n菜单可更改')  # 如果菜单是可以提交的，那么最后一行会少3列。一般每行有9列。故在此插入换行符，以取得较统一的效果
             menu_mutable = True
-            for course in range(0, 8+1):  # course n. a part of a meal served at one time
-                print('\n编号：{0} 菜名：{1} 单价：{2} 最大份数：{3}'.format(
-                    menu_parsed[meal_order, course, 0],
-                    menu_parsed[meal_order, course, 2],
-                    menu_parsed[meal_order, course, 5],
-                    menu_parsed[meal_order, course, 6]))
-                while course != required_course:
-                    course_num = int(input('请输入您要点的份数：'))
-                    if (0 <= course_num <= int(menu_parsed[meal_order, course, 6])):
-                        course_amount[meal_order, course] = course_num  # 将份数放入字典
-                        break
-                    else:
-                        print('请输入一个大于等于0且小于等于{0}的整数'.format(
-                            menu_parsed[meal_order, course, 6]))
-                        continue
-                course_amount[meal_order, required_course] = 1  # 放入必选菜
+            order_status = input("请问您要定这一餐吗？输N不订餐，输其他字符继续").strip().capitalize()
+            if 'N' in order_status:
+                # 其实如果在浏览器里钩上“不订餐”，它会立刻向服务器POST一个__EVENTTARGET被设为下面这个key的表单。要想实现这个，不难，但是真的没什么必要啊。实现了倒是会让本来看起来就非常恶心的代码变得更恶心，还拖慢速度。和一般的表单一起提交应该是可以的
+                menu_form['Repeater1$ctl0{0}$CbkMealtimes'.format(meal_order)] = 'on'
 
-            for course in range(0, 8+1):
-                callbackparam = '{0}Repeater1_GvReport_{1}_TxtNum_{2}@{3}|'.format(
-                    callbackparam,  # 拼起来
-                    meal_order,
-                    course,
-                    course_amount[meal_order, course])
+                # 用来占位，不然服务器不认
+                for course in range(0, 8+1):
+                    callbackparam = '{0}Repeater1_GvReport_{1}_TxtNum_{2}@0|'.format(
+                        callbackparam,  # 拼起来
+                        meal_order,
+                        course
+                    )
+                continue
+            else:
+                for course in range(0, 8+1):  # course n. a part of a meal served at one time
+                    print('\n编号：{0} 菜名：{1} 单价：{2} 最大份数：{3}'.format(
+                        menu_parsed[meal_order, course, 0],
+                        menu_parsed[meal_order, course, 2],
+                        menu_parsed[meal_order, course, 5],
+                        menu_parsed[meal_order, course, 6])
+                    )
+                    while course != required_course:
+                        course_num = int(input('请输入您要点的份数：'))
+                        if (0 <= course_num <= int(menu_parsed[meal_order, course, 6])):
+                            course_amount[meal_order, course] = course_num  # 将份数放入字典
+                            break
+                        else:
+                            print('请输入一个大于等于0且小于等于{0}的整数'.format(
+                                menu_parsed[meal_order, course, 6]))
+                            continue
+                    course_amount[meal_order, required_course] = 1  # 放入必选菜
+
+                for course in range(0, 8+1):
+                    callbackparam = '{0}Repeater1_GvReport_{1}_TxtNum_{2}@{3}|'.format(
+                        callbackparam,  # 拼起来
+                        meal_order,
+                        course,
+                        course_amount[meal_order, course]
+                    )
 
     # 想不出别的用来处理不可修改的菜单的方法，只好声明一个menu_mutable了
     if menu_mutable:
-        # 制作用于提交的表单
-        menu_form = {
-            '__EVENTTARGET': '',
-            '__EVENTARGUMENT': '',
-            '__LASTFOCUS': '',
-            '__VIEWSTATE': evil_viewstate,
-            '__VIEWSTATEENCRYPTED': '',
-            'DrplstRestaurantBasis1$DrplstControl': '4d05282b-b96f-4a3f-ba54-fc218266a524',  # 页面上“选择餐厅”的值
-            '__CALLBACKID': '__Page',
-            '__CALLBACKPARAM': callbackparam,
-            '__EVENTVALIDATION': evil_eventvalidation
-        }
+        menu_form['__CALLBACKPARAM'] = callbackparam
         headers['Referer'] = menu_page_url  # 更新Referer，拉菜单前已经拼好了
         print('\n正在提交菜单')
         submit_menu = opener.post(menu_page_url, menu_form, headers = headers)
