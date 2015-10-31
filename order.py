@@ -17,8 +17,10 @@ def tidy_date_list(tree):
 
 print('深圳实验学校高中部网上订餐系统CLI客户端')
 headers = {
-    'Accept': '*/*',
+    'Accept': 'Accept: image/gif, image/jpeg, image/pjpeg, application/x-ms-application, application/xaml+xml, application/x-ms-xbap, */*',
     'Accept-Encoding': 'gzip, deflate',
+    'Accept-Language': 'zh-Hans-CN, zh-Hans; q=0.5',
+    'Connection': 'keep-alive',
     'User-Agent': 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; Trident/7.0)'  # 伪装成Windows 7 IE 11（兼容性视图）
 }
 opener = requests.Session()
@@ -75,7 +77,7 @@ headers['Referer'] = 'http://gzb.szsy.cn:4000/lcconsole/login!getSSOMessage.acti
 order_login = opener.get(order_login_url)
 order_welcome_page = order_login.text  # 此处会302到欢迎页
 student_name = re.search(r'<span id="LblUserName">当前用户：(.*?)<\/span>', order_welcome_page).group(1)
-# 我觉得为了一个只用一次的页面开一棵DOM Tree太浪费了，用正则省事
+# 我觉得为一个只用一次的页面开一棵DOM Tree太浪费了，用正则省事
 print("欢迎，{0}".format(student_name))
 print("理论上说，现在能够订到", datetime.timedelta(3 + 1) + datetime.date.today(), "及以后的餐")
 # 说的是“72小时”，实际上是把那一整天排除了，故+1
