@@ -17,19 +17,22 @@ def tidy_date_list(tree):
 
 print('深圳实验学校高中部网上订餐系统CLI客户端')
 headers = {
+    'Accept': '*/*',
+    'Accept-Encoding': 'gzip, deflate',
     'User-Agent': 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; Trident/7.0)'  # 伪装成Windows 7 IE 11（兼容性视图）
 }
 opener = requests.Session()
+opener.headers = headers
 
 login_page_url = 'http://gzb.szsy.cn:3000/cas/login'
 login_post_url = 'http://gzb.szsy.cn:3000/cas/login;jsessionid={0}'  # Skeleton
 order_login_url = 'http://gzb.szsy.cn/card/'
 select_date_url = 'http://gzb.szsy.cn/card/Restaurant/RestaurantUserMenu/RestaurantUserSelect.aspx'
-menu_page_url = 'http://gzb.szsy.cn/card/Restaurant/RestaurantUserMenu/RestaurantUserMenu.aspx?Date={0}'  # Skeleton
+menu_page_url = 'http://gzb.szsy.cn/card/Restaurant/RestaurantUserMenu/RestaurantUserMenu.aspx'
 
 # 获得JSESSIONID
 print('正在初始化')
-login_page = opener.get(login_page_url, headers = headers)
+login_page = opener.get(login_page_url)
 evil_jsessionid = re.search(r'jsessionid=(.*?)"', login_page.text).group(1)
 login_post_url = login_post_url.format(evil_jsessionid)
 # https://docs.python.org/3/library/stdtypes.html#str.format
@@ -56,7 +59,7 @@ while True:
     print('正在登录')
     # 登录（SSO）
     headers['Referer'] = login_page_url  # 添加Referer
-    auth = opener.post(login_post_url, data = login_form, headers = headers)
+    auth = opener.post(login_post_url, login_form)
 
     # 以是否存在跳转页面的特征判断登录是否成功
     auth_status = re.match('<SCRIPT LANGUAGE="JavaScript">', auth.text)
@@ -69,13 +72,24 @@ while True:
 
 # 登录校卡系统
 headers['Referer'] = 'http://gzb.szsy.cn:4000/lcconsole/login!getSSOMessage.action'  # 更新Referer
-order_login = opener.get(order_login_url, headers = headers)
+order_login = opener.get(order_login_url)
 order_welcome_page = order_login.text  # 此处会302到欢迎页
 student_name = re.search(r'<span id="LblUserName">当前用户：(.*?)<\/span>', order_welcome_page).group(1)
 # 我觉得为了一个只用一次的页面开一棵DOM Tree太浪费了，用正则省事
 print("欢迎，{0}".format(student_name))
 print("理论上说，现在能够订到", datetime.timedelta(3 + 1) + datetime.date.today(), "及以后的餐")
 # 说的是“72小时”，实际上是把那一整天排除了，故+1
+
+# 第一次访问选择日期的页面，初始化列表
+headers['Referer'] = 'http://gzb.szsy.cn/card/Default.aspx'  # 更新Referer
+print('正在初始化日期列表')
+check_date_first = opener.get(select_date_url)
+date_tree = html.fromstring(check_date_first.text)
+# 存下全部的日期，用于判断
+date_list_full = tidy_date_list(date_tree)
+print('当前月份内，您可以选择以下日期')
+for item in date_list_full:
+    print(item)
 
 while True:
     # 检查日期
@@ -85,15 +99,7 @@ while True:
     date = '{0}-{1}-{2}'.format(date_splited[0].zfill(4), date_splited[1].zfill(2), date_splited[2].zfill(2))
     date_object = datetime.datetime(int(date_splited[0]), int(date_splited[1]), int(date_splited[2]))  # 首先，确认它是个正确的日期
 
-    # 第一次访问选择日期的页面，若输入的日期存在，便去打印菜单。
-    headers['Referer'] = 'http://gzb.szsy.cn/card/Default.aspx'  # 更新Referer
-    print('正在检查日期 Stage1')
-    check_date_first = opener.get(select_date_url, headers = headers)
-    date_tree = html.fromstring(check_date_first.text)
-
-    date_list = tidy_date_list(date_tree)
-
-    if date in date_list:
+    if date in date_list_full:
         pass
     else:  # 若输入的日期不存在，向服务器查询输入的月份
         evil_viewstate = date_tree.xpath('//*[@id="__VIEWSTATE"]/@value')[0]
@@ -112,29 +118,29 @@ while True:
         }
 
         headers['Referer'] = select_date_url  # 更新Referer
-        print('正在检查日期 Stage2')
-        check_date_second = opener.post(select_date_url, data = check_date_second_form, headers = headers)
+        print('正在获取对应月份的订餐日期列表')
+        check_date_second = opener.post(select_date_url, check_date_second_form)
         date_tree = html.fromstring(check_date_second.text)
         date_item = date_tree.xpath('//a[@target="RestaurantContent"]/@href')
 
-        date_list = tidy_date_list(date_tree)
+        date_list_current = tidy_date_list(date_tree)
+        date_list_full.extend(date_list_current)
 
-        if len(date_list) == 0:
+        if len(date_list_current) == 0:
             print('月份内没有可以点餐的日期')
             continue
-        elif date in date_list:
+        elif date in date_list_current:
             pass
         else:
             print('请输入')
-            for item in date_list:
+            for item in date_list_full:
                 print(item)
             print('中的日期')
             continue
 
     # 拉菜单
-    menu_page_url = menu_page_url.format(date)
     print('正在获取菜单')
-    menu = opener.get(menu_page_url, headers = headers)
+    menu = opener.get(menu_page_url, params = {'Date': date})
 
     # 我也是被逼的……如果不这么干，lxml提取出的列表里会有那串空白，且还不能用lxml.html.clean去掉
     # 看起来lxml不会自动去掉空格
@@ -164,8 +170,8 @@ while True:
 
     print('{0}，星期{1}'.format(date, date_object.isoweekday()))
     for meal_order in range(0, menu_count):  # 这是个半闭半开的区间[a,b)，且GvReport是从0开始编号的，故这样
-        xpath_exp = '//table[@id="Repeater1_GvReport_{0}"]/tr/td//text()'.format(meal_order)
-        menu_item = menu_tree.xpath(xpath_exp)
+        xpath_menu = '//table[@id="Repeater1_GvReport_{0}"]/tr/td//text()'.format(meal_order)
+        menu_item = menu_tree.xpath(xpath_menu)
 
         # 打印菜单
         meal_order_dict = {
@@ -182,9 +188,8 @@ while True:
             print(item, end='\t')  # 这样就不会换行了，以制表符分隔元素
             menu_parsed[meal_order, row, column] = item
 
-            if column == 4:
-                if item == '必选':
-                    required_course = row  # 用于记录必选菜的编号，以处理必选菜不在最后的特殊情况
+            if (column == 4) and (item == '必选'):
+                required_course = row  # 用于记录必选菜的编号，以处理必选菜不在最后的特殊情况
 
             i += 1
             column += 1
@@ -244,13 +249,12 @@ while True:
     # 想不出别的用来处理不可修改的菜单的方法，只好声明一个menu_mutable了
     if menu_mutable:
         menu_form['__CALLBACKPARAM'] = callbackparam
-        headers['Referer'] = menu_page_url  # 更新Referer，拉菜单前已经拼好了
+        headers['Referer'] = menu_page_url + '?Date=' + date  # 更新Referer
         print('\n正在提交菜单')
-        submit_menu = opener.post(menu_page_url, menu_form, headers = headers)
+        submit_menu = opener.post(menu_page_url, menu_form, params = {'Date': date})
 
         if '订餐成功！' in submit_menu.text:
             print('\n订餐成功')
         else:
             print('\n订餐失败')
 
-    menu_page_url = 'http://gzb.szsy.cn/card/Restaurant/RestaurantUserMenu/RestaurantUserMenu.aspx?Date={0}'  # 重新赋值
