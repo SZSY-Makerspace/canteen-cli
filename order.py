@@ -5,6 +5,7 @@ from getpass import getpass
 import requests
 from lxml import etree, html
 
+
 def tidy_date_list(tree):
     # 用来解析一棵树，得到可订餐的日期列表
     date_list = tree.xpath('//a[@target="RestaurantContent"]/@href')
@@ -46,6 +47,8 @@ meal_order_tuple = ('早餐菜单', '午餐菜单', '晚餐菜单')
 get_viewstate = re.compile('id="__VIEWSTATE" value="(.*?)"')
 get_eventvalidation = re.compile('id="__EVENTVALIDATION" value="(.*?)"')
 
+queried_month = []
+
 # 获得JSESSIONID
 print('正在初始化')
 login_page = opener.get(login_page_url)
@@ -64,8 +67,10 @@ while True:
     print('是的，你在输密码的时候不会出现*，输完按Enter即可')
     password = getpass('请输入密码：')
 
-    login_form['username'] = student_id
-    login_form['password'] = password
+    login_form.update(
+        'username': student_id,
+        'password': password
+    )
 
     print('正在登录')
     # 登录（SSO）
@@ -102,7 +107,6 @@ date_list_full = tidy_date_list(date_tree)
 print('当前月份内，您可以选择以下日期')
 for item in date_list_full:
     print(item)
-queried_month = []
 queried_month.append(re.search('<option selected="selected" value=".{1,2}?">(.{1,2}?)月<\/option>', date_page).group(1))
 
 while True:
@@ -128,16 +132,19 @@ while True:
         # They are evil, aren't they?
 
         # 制作获取对应月份页面的表单
-        logined_skeleton_form['__EVENTTARGET'] = 'DrplstMonth1$DrplstControl'
-        logined_skeleton_form['__VIEWSTATE'] = evil_viewstate
-        logined_skeleton_form['__EVENTVALIDATION'] = evil_eventvalidation
-        logined_skeleton_form['DrplstYear1$DrplstControl'] = date_splited[0]
-        logined_skeleton_form['DrplstMonth1$DrplstControl'] = int(date_splited[1])  # 用途：将09变成9
+        logined_skeleton_form.update(
+            '__EVENTTARGET': 'DrplstMonth1$DrplstControl',
+            '__VIEWSTATE': evil_viewstate,
+            '__EVENTVALIDATION': evil_eventvalidation,
+            'DrplstYear1$DrplstControl': date_splited[0],
+            'DrplstMonth1$DrplstControl': int(date_splited[1])  # 用途：将09变成9
+        )
 
         headers['Referer'] = select_date_url  # 更新Referer
         print('正在获取对应月份的订餐日期列表')
         get_date = opener.post(select_date_url, logined_skeleton_form)
-        date_tree = html.fromstring(get_date.text)
+        date_page = get_date.text
+        date_tree = html.fromstring(date_page)
         date_item = date_tree.xpath('//a[@target="RestaurantContent"]/@href')
 
         # 清理
@@ -162,7 +169,7 @@ while True:
 
     # 拉菜单
     print('正在获取菜单')
-    menu = opener.get(menu_page_url, params = {'Date': date})
+    menu = opener.get(menu_page_url, params={'Date': date})
 
     # 我也是被逼的……如果不这么干，lxml提取出的列表里会有那串空白，且还不能用lxml.html.clean去掉
     # 看起来lxml不会自动去掉空格
@@ -201,15 +208,13 @@ while True:
         print('编号\t类别\t菜名\t\t套餐\t必选\t单价\t最大份数\t订购份数\t订餐状态')
         row = 0
         column = 0
-        i = 0
-        for item in menu_item:
+        for i, item in enumerate(menu_item):
             print(item, end='\t')  # 这样就不会换行了，以制表符分隔元素
             menu_parsed[meal_order, row, column] = item
 
             if (column == 4) and (item == '必选'):
                 required_course = row  # 用于记录必选菜的编号，以处理必选菜不在最后的特殊情况
 
-            i += 1
             column += 1
             if (i % 9 == 0):
                 column = 0
@@ -279,12 +284,14 @@ while True:
                     )
 
     # 想不出别的用来处理不可修改的菜单的方法，只好声明一个menu_mutable了
-    if menu_mutable:     
+    if menu_mutable:
         # 制作用于提交的表单
-        logined_skeleton_form['__VIEWSTATE'] = evil_viewstate
-        logined_skeleton_form['__VIEWSTATEENCRYPTED'] = ''
-        logined_skeleton_form['DrplstRestaurantBasis1$DrplstControl'] = '4d05282b-b96f-4a3f-ba54-fc218266a524'
-        logined_skeleton_form['__EVENTVALIDATION'] = evil_eventvalidation
+        logined_skeleton_form.update(
+            '__VIEWSTATE': evil_viewstate,
+            '__VIEWSTATEENCRYPTED': '',
+            'DrplstRestaurantBasis1$DrplstControl': '4d05282b-b96f-4a3f-ba54-fc218266a524',
+            '__EVENTVALIDATION': evil_eventvalidation
+        )
 
         if to_change_status:
             for meal_order in to_change_status:
@@ -296,24 +303,36 @@ while True:
                     del logined_skeleton_form[box_id]
 
                 logined_skeleton_form['__EVENTTARGET'] = box_id
-                submit_order_staus_change = opener.post(menu_page_url, logined_skeleton_form, params = {'Date': date})
+                submit_order_staus_change = opener.post(
+                    menu_page_url,
+                    logined_skeleton_form,
+                    params={'Date': date}
+                )
                 submit_return_page = submit_order_staus_change.text
 
                 # 提交后会返回新页面，又要改这些
                 # Evil ASP.NET!
                 evil_viewstate = get_viewstate.search(submit_return_page).group(1)
                 evil_eventvalidation = get_eventvalidation.search(submit_return_page).group(1)
-                logined_skeleton_form['__VIEWSTATE'] = evil_viewstate
-                logined_skeleton_form['__EVENTVALIDATION'] = evil_eventvalidation
+                logined_skeleton_form.update(
+                    '__VIEWSTATE': evil_viewstate,
+                    '__EVENTVALIDATION': evil_eventvalidation
+                )
 
             # 清理
             logined_skeleton_form['__EVENTTARGET'] = ''
 
-        logined_skeleton_form['__CALLBACKID'] = '__Page'
-        logined_skeleton_form['__CALLBACKPARAM'] = callbackparam
+        logined_skeleton_form.update(
+            '__CALLBACKID': '__Page',
+            '__CALLBACKPARAM': callbackparam
+        )
         headers['Referer'] = menu_page_url + '?Date=' + date  # 更新Referer
         print('\n正在提交菜单')
-        submit_menu = opener.post(menu_page_url, logined_skeleton_form, params = {'Date': date})
+        submit_menu = opener.post(
+            menu_page_url,
+            logined_skeleton_form,
+            params={'Date': date}
+        )
 
         # 清理
         del logined_skeleton_form['DrplstRestaurantBasis1$DrplstControl']
@@ -328,4 +347,3 @@ while True:
             print('\n订餐成功')
         else:
             print('\n订餐失败')
-
