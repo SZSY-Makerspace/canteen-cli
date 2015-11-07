@@ -6,13 +6,10 @@ import requests
 from lxml import etree, html
 
 
-def tidy_date_list(tree):
-    # 用来解析一棵树，得到可订餐的日期列表
-    date_list = tree.xpath('//a[@target="RestaurantContent"]/@href')
-
-    for i, item in enumerate(date_list):
-        date_list[i] = item.replace('RestaurantUserMenu.aspx?Date=', '')
-
+def get_date_list(string):
+    # 用来解析选择日期的页面，得到可查询的日期的列表
+    date_list_regex = re.compile('href="RestaurantUserMenu\.aspx\?Date=(\d{4}-\d{1,2}-\d{1,2})"')
+    date_list = date_list_regex.findall(string)
     return date_list
 
 def get_viewstate(string):
@@ -54,8 +51,8 @@ logined_skeleton_form = {
 
 meal_order_tuple = ('早餐菜单', '午餐菜单', '晚餐菜单')
 
-get_selected_year = re.compile('<option selected="selected" value=".{4}">(.{4})<\/option>')
-get_selected_month = re.compile('<option selected="selected" value=".{1,2}">(.{1,2})月<\/option>')
+get_selected_year = re.compile('<option selected="selected" value="\d{4}">(\d{4})<\/option>')
+get_selected_month = re.compile('<option selected="selected" value="\d{1,2}">(\d{1,2})月<\/option>')
 
 queried_month = []
 
@@ -111,15 +108,15 @@ headers['Referer'] = 'http://gzb.szsy.cn/card/Default.aspx'  # 更新Referer
 print('正在初始化日期列表')
 get_date = opener.get(select_date_url)
 date_page = get_date.text
-date_tree = html.fromstring(date_page)
 # 存下全部的日期，用于判断
-date_list_full = tidy_date_list(date_tree)
+date_list_full = list(get_date_list(date_page))
 print('当前月份内，您可以选择以下日期')
 for item in date_list_full:
     print(item)
 selected_year = get_selected_year.search(date_page).group(1)
 selected_month = get_selected_month.search(date_page).group(1)
 queried_month.append(selected_year + '-' + selected_month)
+selectable_year = re.findall(r'value="(\d{4})"', date_page)
 
 while True:
     # 检查日期
@@ -127,7 +124,17 @@ while True:
     date_splited = date.split('-')
     # 统一宽度。这样就能够处理2015-9-3这种“格式错误”的日期了
     date = '{0}-{1}-{2}'.format(date_splited[0].zfill(4), date_splited[1].zfill(2), date_splited[2].zfill(2))
-    date_object = datetime.datetime(int(date_splited[0]), int(date_splited[1]), int(date_splited[2]))  # 首先，确认它是个正确的日期
+    # 首先，确认它是个正确的日期
+    date_object = datetime.date(int(date_splited[0]), int(date_splited[1]), int(date_splited[2]))
+    # 其次，确认输入的年份在可选的年份中
+    if date_splited[0] in selectable_year:
+        pass
+    else:
+        print('请输入在')
+        for year in selectable_year:
+            print(year)
+        print('中的年份')
+        continue
 
     if date in date_list_full:
         pass
@@ -155,14 +162,11 @@ while True:
         print('正在获取对应月份的订餐日期列表')
         get_date = opener.post(select_date_url, logined_skeleton_form)
         date_page = get_date.text
-        date_tree = html.fromstring(date_page)
-        date_item = date_tree.xpath('//a[@target="RestaurantContent"]/@href')
-
         # 清理
         del logined_skeleton_form['DrplstYear1$DrplstControl']
         del logined_skeleton_form['DrplstMonth1$DrplstControl']
 
-        date_list_current = tidy_date_list(date_tree)
+        date_list_current = get_date_list(date_page)
         date_list_full.extend(date_list_current)
         queried_month.append(date_splited[0] + '-' + date_splited[1].lstrip('0'))
 
