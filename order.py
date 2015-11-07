@@ -15,6 +15,16 @@ def tidy_date_list(tree):
 
     return date_list
 
+def get_viewstate(string):
+    viewstate_regex = re.compile('id="__VIEWSTATE" value="(.*?)"')
+    viewstate = viewstate_regex.search(string).group(1)
+    return viewstate
+
+def get_eventvalidation(string):
+    eventvalidation_regex = re.compile('id="__EVENTVALIDATION" value="(.*?)"')
+    eventvalidation = eventvalidation_regex.search(string).group(1)
+    return eventvalidation
+
 print('深圳实验学校高中部网上订餐系统CLI客户端')
 headers = {
     'Accept': 'Accept: image/gif, image/jpeg, image/pjpeg, application/x-ms-application, application/xaml+xml, application/x-ms-xbap, */*',
@@ -44,8 +54,8 @@ logined_skeleton_form = {
 
 meal_order_tuple = ('早餐菜单', '午餐菜单', '晚餐菜单')
 
-get_viewstate = re.compile('id="__VIEWSTATE" value="(.*?)"')
-get_eventvalidation = re.compile('id="__EVENTVALIDATION" value="(.*?)"')
+get_selected_year = re.compile('<option selected="selected" value=".{4}">(.{4})<\/option>')
+get_selected_month = re.compile('<option selected="selected" value=".{1,2}">(.{1,2})月<\/option>')
 
 queried_month = []
 
@@ -107,7 +117,9 @@ date_list_full = tidy_date_list(date_tree)
 print('当前月份内，您可以选择以下日期')
 for item in date_list_full:
     print(item)
-queried_month.append(re.search('<option selected="selected" value=".{1,2}?">(.{1,2}?)月<\/option>', date_page).group(1))
+selected_year = get_selected_year.search(date_page).group(1)
+selected_month = get_selected_month.search(date_page).group(1)
+queried_month.append(selected_year + '-' + selected_month)
 
 while True:
     # 检查日期
@@ -118,7 +130,7 @@ while True:
     date_object = datetime.datetime(int(date_splited[0]), int(date_splited[1]), int(date_splited[2]))  # 首先，确认它是个正确的日期
 
     if date in date_list_full:
-        queried_month.append(date_splited[1])
+        queried_month.append(date_splited[0] + '-' + date_splited[1].lstrip('0'))
         pass
     elif date_splited[1] in queried_month:
         print('请输入')
@@ -127,8 +139,8 @@ while True:
         print('中的日期')
         continue
     else:  # 若输入的日期不存在，向服务器查询输入的月份
-        evil_viewstate = get_viewstate.search(get_date.text).group(1)
-        evil_eventvalidation = get_eventvalidation.search(get_date.text).group(1)
+        evil_viewstate = get_viewstate(get_date.text)
+        evil_eventvalidation = get_eventvalidation(get_date.text)
         # They are evil, aren't they?
 
         # 制作获取对应月份页面的表单
@@ -137,7 +149,7 @@ while True:
             '__VIEWSTATE': evil_viewstate,
             '__EVENTVALIDATION': evil_eventvalidation,
             'DrplstYear1$DrplstControl': date_splited[0],
-            'DrplstMonth1$DrplstControl': int(date_splited[1])  # 用途：将09变成9
+            'DrplstMonth1$DrplstControl': date_splited[1].lstrip('0')
         })
 
         headers['Referer'] = select_date_url  # 更新Referer
@@ -153,7 +165,7 @@ while True:
 
         date_list_current = tidy_date_list(date_tree)
         date_list_full.extend(date_list_current)
-        queried_month.append(int(date_splited[1]))
+        queried_month.append(date_splited[0] + '-' + date_splited[1].lstrip('0'))
 
         if len(date_list_current) == 0:
             print('月份内没有可以点餐的日期')
@@ -178,8 +190,8 @@ while True:
     menu_tree = html.fromstring(menu_tidied)
 
     # 没办法，不同页面的这两个值都不一样
-    evil_viewstate = get_viewstate.search(menu_tidied).group(1)
-    evil_eventvalidation = get_eventvalidation.search(menu_tidied).group(1)
+    evil_viewstate = get_viewstate(menu_tidied)
+    evil_eventvalidation = get_eventvalidation(menu_tidied)
 
     menu_count = len(menu_tree.xpath('//table[@id]'))  # 只有装着菜单的table是带"id"属性的
     menu_parsed = {}  # 由于Python中没有多维数组，而我嫌初始化一个"list of list of list"太麻烦，故使用一个字典，(餐次, 编号, 列数) = '原表格内容'
@@ -188,15 +200,12 @@ while True:
 
     # 准备已勾选“不订餐”的餐次的列表
     to_change_status = []
-    to_add = []
-    to_remove = []
-    xpath_selected_checkbox = '//input[@checked]/@id'
-    selected_checkbox_list = menu_tree.xpath(xpath_selected_checkbox)
+    to_select = []
+    to_deselect = []
+    selected_checkbox_list = menu_tree.xpath('//input[@checked]/@id')
     for i, item in enumerate(selected_checkbox_list):
         tidied_item = int(item.replace('Repeater1_CbkMealtimes_', ''))
         selected_checkbox_list[i] = tidied_item
-        box_id = 'Repeater1$ctl0{0}$CbkMealtimes'.format(tidied_item)
-        logined_skeleton_form[box_id] = 'on'
 
     print('{0}，星期{1}'.format(date, date_object.isoweekday()))
     for meal_order in range(0, menu_count):  # 这是个半闭半开的区间[a,b)，且GvReport是从0开始编号的，故这样
@@ -234,13 +243,19 @@ while True:
         elif (menu_parsed[meal_order, 9, 3] == '合计:'):
             print('\n菜单可更改')  # 如果菜单是可以提交的，那么最后一行会少3列。一般每行有9列。故在此插入换行符，以取得较统一的效果
             menu_mutable = True
+
+            # 确定菜单可修改后再把已勾选“不订餐”的放入表单
+            for item in selected_checkbox_list:
+                box_id = 'Repeater1$ctl0{0}$CbkMealtimes'.format(item)
+                logined_skeleton_form[box_id] = 'on'
+
             order_status = input("请问您要定这一餐吗？输N不订餐，输其他字符继续").strip().capitalize()
             if 'N' in order_status:
                 # 由于浏览器的行为是在选中“不订餐”后立即向服务器发送状态变化的请求，而如果这么干有些浪费时间，故把这些留到最后提交
                 if not not_order:
                     selected_checkbox_list.append(meal_order)
                     to_change_status.append(meal_order)
-                    to_add.append(meal_order)
+                    to_select.append(meal_order)
 
                 # 用来占位，不然服务器不认
                 for course in range(0, 8+1):
@@ -255,14 +270,15 @@ while True:
                 if not_order:
                     selected_checkbox_list.remove(meal_order)
                     to_change_status.append(meal_order)
-                    to_remove.append(meal_order)
+                    to_deselect.append(meal_order)
 
                 for course in range(0, 8+1):  # course n. a part of a meal served at one time
                     print('\n编号：{0} 菜名：{1} 单价：{2} 最大份数：{3}'.format(
                         menu_parsed[meal_order, course, 0],
                         menu_parsed[meal_order, course, 2],
                         menu_parsed[meal_order, course, 5],
-                        menu_parsed[meal_order, course, 6])
+                        menu_parsed[meal_order, course, 6]
+                        )
                     )
                     while course != required_course:
                         course_num = int(input('请输入您要点的份数：'))
@@ -297,9 +313,9 @@ while True:
             for meal_order in to_change_status:
                 box_id = 'Repeater1$ctl0{0}$CbkMealtimes'.format(meal_order)
 
-                if meal_order in to_add:
+                if meal_order in to_select:
                     logined_skeleton_form[box_id] = 'on'
-                elif meal_order in to_remove:
+                elif meal_order in to_deselect:
                     del logined_skeleton_form[box_id]
 
                 logined_skeleton_form['__EVENTTARGET'] = box_id
@@ -312,8 +328,8 @@ while True:
 
                 # 提交后会返回新页面，又要改这些
                 # Evil ASP.NET!
-                evil_viewstate = get_viewstate.search(submit_return_page).group(1)
-                evil_eventvalidation = get_eventvalidation.search(submit_return_page).group(1)
+                evil_viewstate = get_viewstate(submit_return_page)
+                evil_eventvalidation = get_eventvalidation(submit_return_page)
                 logined_skeleton_form.update({
                     '__VIEWSTATE': evil_viewstate,
                     '__EVENTVALIDATION': evil_eventvalidation
