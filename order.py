@@ -67,10 +67,10 @@ while True:
     print('是的，你在输密码的时候不会出现*，输完按Enter即可')
     password = getpass('请输入密码：')
 
-    login_form.update(
+    login_form.update({
         'username': student_id,
         'password': password
-    )
+    })
 
     print('正在登录')
     # 登录（SSO）
@@ -132,13 +132,13 @@ while True:
         # They are evil, aren't they?
 
         # 制作获取对应月份页面的表单
-        logined_skeleton_form.update(
+        logined_skeleton_form.update({
             '__EVENTTARGET': 'DrplstMonth1$DrplstControl',
             '__VIEWSTATE': evil_viewstate,
             '__EVENTVALIDATION': evil_eventvalidation,
             'DrplstYear1$DrplstControl': date_splited[0],
             'DrplstMonth1$DrplstControl': int(date_splited[1])  # 用途：将09变成9
-        )
+        })
 
         headers['Referer'] = select_date_url  # 更新Referer
         print('正在获取对应月份的订餐日期列表')
@@ -216,7 +216,7 @@ while True:
                 required_course = row  # 用于记录必选菜的编号，以处理必选菜不在最后的特殊情况
 
             column += 1
-            if (i % 9 == 0):
+            if (i % 9 == 8):
                 column = 0
                 row += 1
                 print()  # 换行打印
@@ -286,12 +286,12 @@ while True:
     # 想不出别的用来处理不可修改的菜单的方法，只好声明一个menu_mutable了
     if menu_mutable:
         # 制作用于提交的表单
-        logined_skeleton_form.update(
+        logined_skeleton_form.update({
             '__VIEWSTATE': evil_viewstate,
             '__VIEWSTATEENCRYPTED': '',
             'DrplstRestaurantBasis1$DrplstControl': '4d05282b-b96f-4a3f-ba54-fc218266a524',
             '__EVENTVALIDATION': evil_eventvalidation
-        )
+        })
 
         if to_change_status:
             for meal_order in to_change_status:
@@ -314,18 +314,18 @@ while True:
                 # Evil ASP.NET!
                 evil_viewstate = get_viewstate.search(submit_return_page).group(1)
                 evil_eventvalidation = get_eventvalidation.search(submit_return_page).group(1)
-                logined_skeleton_form.update(
+                logined_skeleton_form.update({
                     '__VIEWSTATE': evil_viewstate,
                     '__EVENTVALIDATION': evil_eventvalidation
-                )
+                })
 
             # 清理
             logined_skeleton_form['__EVENTTARGET'] = ''
 
-        logined_skeleton_form.update(
+        logined_skeleton_form.update({
             '__CALLBACKID': '__Page',
             '__CALLBACKPARAM': callbackparam
-        )
+        })
         headers['Referer'] = menu_page_url + '?Date=' + date  # 更新Referer
         print('\n正在提交菜单')
         submit_menu = opener.post(
