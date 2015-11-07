@@ -130,9 +130,8 @@ while True:
     date_object = datetime.datetime(int(date_splited[0]), int(date_splited[1]), int(date_splited[2]))  # 首先，确认它是个正确的日期
 
     if date in date_list_full:
-        queried_month.append(date_splited[0] + '-' + date_splited[1].lstrip('0'))
         pass
-    elif date_splited[1] in queried_month:
+    elif (date_splited[0] + '-' + date_splited[1].lstrip('0')) in queried_month:
         print('请输入')
         for item in date_list_full:
             print(item)
