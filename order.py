@@ -65,7 +65,7 @@ login_post_url = login_post_url.format(evil_jsessionid)
 # 说真的，上面那步没啥必要。不过，尽量模拟得逼真点吧
 
 while True:
-    student_id = int(input('\n请输入学号：'))
+    student_id = int(input('\n输完按Enter\n请输入学号：'))
     if len(str(student_id)) == 7:
         pass
     else:
@@ -99,9 +99,7 @@ order_login = opener.get(order_login_url)
 order_welcome_page = order_login.text  # 此处会302到欢迎页
 # 我觉得为一个只用一次的页面开一棵DOM Tree太浪费了，用正则省事
 student_name = re.search(r'<span id="LblUserName">当前用户：(.*?)<\/span>', order_welcome_page).group(1)
-print("欢迎，{0}".format(student_name))
-print("理论上说，现在能够订到", datetime.timedelta(3 + 1) + datetime.date.today(), "及以后的餐")
-# 说的是“72小时”，实际上是把那一整天排除了，故+1
+print("\n欢迎，{0}".format(student_name))
 
 # 第一次访问选择日期的页面，初始化列表
 headers['Referer'] = 'http://gzb.szsy.cn/card/Default.aspx'  # 更新Referer
@@ -111,8 +109,12 @@ date_page = get_date.text
 # 存下全部的日期，用于判断
 date_list_full = list(get_date_list(date_page))
 print('当前月份内，您可以选择以下日期')
-for item in date_list_full:
-    print(item)
+for date in date_list_full:
+    date_splited = date.split('-')
+    date_object = datetime.date(int(date_splited[0]), int(date_splited[1]), int(date_splited[2]))
+    print('{0} 星期{1}'.format(date, date_object.isoweekday()))
+print("理论上说，现在能够订到", datetime.timedelta(3 + 1) + datetime.date.today(), "及以后的餐")
+# 说的是“72小时”，实际上是把那一整天排除了，故+1
 selected_year = get_selected_year.search(date_page).group(1)
 selected_month = get_selected_month.search(date_page).group(1)
 queried_month.append(selected_year + '-' + selected_month)
@@ -120,7 +122,7 @@ selectable_year = re.findall(r'value="(\d{4})"', date_page)
 
 while True:
     # 检查日期
-    date = input('\n请输入日期（格式如：2015-09-30）：')
+    date = input('要是想得到别的月份的菜单，输一个那个月的日期\n请输入日期（格式如：2015-09-30）：')
     date_splited = date.split('-')
     # 统一宽度。这样就能够处理2015-9-3这种“格式错误”的日期了
     date = '{0}-{1}-{2}'.format(date_splited[0].zfill(4), date_splited[1].zfill(2), date_splited[2].zfill(2))
@@ -177,8 +179,10 @@ while True:
             pass
         else:
             print('请输入')
-            for item in date_list_full:
-                print(item)
+            for date in date_list_full:
+                date_splited = date.split('-')
+                date_object = datetime.date(int(date_splited[0]), int(date_splited[1]), int(date_splited[2]))
+                print('{0} 星期{1}'.format(date, date_object.isoweekday()))
             print('中的日期')
             continue
 
@@ -277,7 +281,11 @@ while True:
                         menu_parsed[meal_order, course, 6]
                         ))
                     while course != required_course:
-                        course_num = int(input('请输入您要点的份数：'))
+                        course_num = input('直接Enter就当作是0\n请输入您要点的份数：')
+                        # 如果直接敲Enter，就当作是0
+                        if not course_num:
+                            course_num = 0
+                        course_num = int(course_num)
                         if 0 <= course_num <= int(menu_parsed[meal_order, course, 6]):
                             course_amount[meal_order, course] = course_num  # 将份数放入字典
                             break
