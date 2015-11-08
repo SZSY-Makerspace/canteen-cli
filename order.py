@@ -59,7 +59,7 @@ queried_month = []
 # 获得JSESSIONID
 print('正在初始化')
 login_page = opener.get(login_page_url)
-evil_jsessionid = re.search(r'jsessionid=(.*?)"', login_page.text).group(1)
+evil_jsessionid = re.search('jsessionid=(.*?)"', login_page.text).group(1)
 login_post_url = login_post_url.format(evil_jsessionid)
 # https://docs.python.org/3/library/stdtypes.html#str.format
 # 说真的，上面那步没啥必要。不过，尽量模拟得逼真点吧
@@ -85,7 +85,7 @@ while True:
     auth = opener.post(login_post_url, login_form)
 
     # 以是否存在跳转页面的特征判断登录是否成功
-    auth_status = re.match('<SCRIPT LANGUAGE="JavaScript">', auth.text)
+    auth_status = '<SCRIPT LANGUAGE="JavaScript">' in auth.text
 
     if not auth_status:  # 若登录失败，由于被重定向回登陆页，上面正则会返回None
         print('登录失败，请检查学号和密码是否正确')
@@ -186,17 +186,14 @@ while True:
     print('正在获取菜单')
     menu = opener.get(menu_page_url, params={'Date': date})
 
-    # 我也是被逼的……如果不这么干，lxml提取出的列表里会有那串空白，且还不能用lxml.html.clean去掉
-    # 看起来lxml不会自动去掉空格
-    menu_tidied = re.sub(r'\r\n {24}( {4})?', '', menu.text)
+    # 我也是被逼的……如果不这么干，lxml提取出的列表里会有那串空白
+    # 且看上去remove_blank_text不是这么用的
+    menu_tidied = re.sub(r'\r\n {24}(?: {4})?', '', menu.text)
     menu_tidied = menu_tidied.replace('&nbsp;', ' ')  # 避免在Windows下出现编码问题，GBK中没有\xa0
     menu_tree = html.fromstring(menu_tidied)
 
-    # 没办法，不同页面的这两个值都不一样
-    evil_viewstate = get_viewstate(menu_tidied)
-    evil_eventvalidation = get_eventvalidation(menu_tidied)
-
-    menu_count = len(menu_tree.xpath('//table[@id]'))  # 只有装着菜单的table是带"id"属性的
+    # 只有装着菜单的table是带"id"属性的
+    menu_count = len(re.findall('id="Repeater1_GvReport_(\d)"', menu_tidied))
     menu_parsed = {}  # 由于Python中没有多维数组，而我嫌初始化一个"list of list of list"太麻烦，故使用一个字典，(餐次, 编号, 列数) = '原表格内容'
     course_amount = {}  # (餐次, 编号) = 数量
     callbackparam = ''  # 用于提交的菜单参数
@@ -205,10 +202,9 @@ while True:
     to_change_status = []
     to_select = []
     to_deselect = []
-    selected_checkbox_list = menu_tree.xpath('//input[@checked]/@id')
-    for i, item in enumerate(selected_checkbox_list):
-        tidied_item = int(item.replace('Repeater1_CbkMealtimes_', ''))
-        selected_checkbox_list[i] = tidied_item
+    selected_checkbox_list = map(int,
+        re.findall('id="Repeater1_CbkMealtimes_(\d)"', menu_tidied)
+    )
 
     print('{0}，星期{1}'.format(date, date_object.isoweekday()))
     for meal_order in range(0, menu_count):  # 这是个半闭半开的区间[a,b)，且GvReport是从0开始编号的，故这样
@@ -304,6 +300,9 @@ while True:
 
     # 想不出别的用来处理不可修改的菜单的方法，只好声明一个menu_mutable了
     if menu_mutable:
+        # 获取菜单页的这些鬼东西
+        evil_viewstate = get_viewstate(menu_tidied)
+        evil_eventvalidation = get_eventvalidation(menu_tidied)
         # 制作用于提交的表单
         logined_skeleton_form.update({
             '__VIEWSTATE': evil_viewstate,
