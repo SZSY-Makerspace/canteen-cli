@@ -3,12 +3,12 @@ import re
 import datetime
 from getpass import getpass
 import requests
-from lxml import etree, html
+from lxml import html
 
 
 def get_date_list(string):
     # 用来解析选择日期的页面，得到可查询的日期的列表
-    date_list_regex = re.compile('href="RestaurantUserMenu\.aspx\?Date=(\d{4}-\d{1,2}-\d{1,2})"')
+    date_list_regex = re.compile(r'href="RestaurantUserMenu\.aspx\?Date=(\d{4}-\d{1,2}-\d{1,2})"')
     date_list = date_list_regex.findall(string)
     return date_list
 
@@ -51,8 +51,8 @@ logined_skeleton_form = {
 
 meal_order_tuple = ('早餐菜单', '午餐菜单', '晚餐菜单')
 
-get_selected_year = re.compile('<option selected="selected" value="\d{4}">(\d{4})<\/option>')
-get_selected_month = re.compile('<option selected="selected" value="\d{1,2}">(\d{1,2})月<\/option>')
+get_selected_year = re.compile(r'<option selected="selected" value="\d{4}">(\d{4})<\/option>')
+get_selected_month = re.compile(r'<option selected="selected" value="\d{1,2}">(\d{1,2})月<\/option>')
 
 queried_month = []
 
@@ -66,7 +66,7 @@ login_post_url = login_post_url.format(evil_jsessionid)
 
 while True:
     student_id = int(input('\n请输入学号：'))
-    if (len(str(student_id)) == 7):
+    if len(str(student_id)) == 7:
         pass
     else:
         print('请输入长度为7位数字的学号')
@@ -138,7 +138,7 @@ while True:
 
     if date in date_list_full:
         pass
-    elif (date_splited[0] + '-' + date_splited[1].lstrip('0')) in queried_month:
+    elif date_splited[0] + '-' + date_splited[1].lstrip('0') in queried_month:
         print('请输入')
         for item in date_list_full:
             print(item)
@@ -193,7 +193,7 @@ while True:
     menu_tree = html.fromstring(menu_tidied)
 
     # 只有装着菜单的table是带"id"属性的
-    menu_count = len(re.findall('id="Repeater1_GvReport_(\d)"', menu_tidied))
+    menu_count = len(re.findall(r'id="Repeater1_GvReport_(\d)"', menu_tidied))
     menu_parsed = {}  # 由于Python中没有多维数组，而我嫌初始化一个"list of list of list"太麻烦，故使用一个字典，(餐次, 编号, 列数) = '原表格内容'
     course_amount = {}  # (餐次, 编号) = 数量
     callbackparam = ''  # 用于提交的菜单参数
@@ -202,9 +202,7 @@ while True:
     to_change_status = []
     to_select = []
     to_deselect = []
-    selected_checkbox_list = map(int,
-        re.findall('id="Repeater1_CbkMealtimes_(\d)"', menu_tidied)
-    )
+    selected_checkbox_list = [int(x) for x in re.findall(r'name="Repeater1\$ctl0(\d)\$CbkMealtimes" checked="checked"', menu_tidied)]
 
     print('{0}，星期{1}'.format(date, date_object.isoweekday()))
     for meal_order in range(0, menu_count):  # 这是个半闭半开的区间[a,b)，且GvReport是从0开始编号的，故这样
@@ -224,7 +222,7 @@ while True:
                 required_course = row  # 用于记录必选菜的编号，以处理必选菜不在最后的特殊情况
 
             column += 1
-            if (i % 9 == 8):
+            if i % 9 == 8:
                 column = 0
                 row += 1
                 print()  # 换行打印
@@ -277,11 +275,10 @@ while True:
                         menu_parsed[meal_order, course, 2],
                         menu_parsed[meal_order, course, 5],
                         menu_parsed[meal_order, course, 6]
-                        )
-                    )
+                        ))
                     while course != required_course:
                         course_num = int(input('请输入您要点的份数：'))
-                        if (0 <= course_num <= int(menu_parsed[meal_order, course, 6])):
+                        if 0 <= course_num <= int(menu_parsed[meal_order, course, 6]):
                             course_amount[meal_order, course] = course_num  # 将份数放入字典
                             break
                         else:
