@@ -200,7 +200,7 @@ while True:
     menu_count = len(re.findall(r'id="Repeater1_GvReport_(\d)"', menu_tidied))
     menu_parsed = {}  # 由于Python中没有多维数组，而我嫌初始化一个"list of list of list"太麻烦，故使用一个字典，(餐次, 编号, 列数) = '原表格内容'
     course_amount = {}  # (餐次, 编号) = 数量
-    callbackparam = ''  # 用于提交的菜单参数
+    submit_form_string = ''  # 用于提交的菜单参数
 
     # 准备已勾选“不订餐”的餐次的列表
     to_change_status = []
@@ -218,18 +218,31 @@ while True:
         print('编号\t类别\t菜名\t\t套餐\t必选\t单价\t最大份数\t订购份数\t订餐状态')
         row = 0
         column = 0
+        course_count = 0  # course n. a part of a meal served at one time
         for i, item in enumerate(menu_item):
             print(item, end='\t')  # 这样就不会换行了，以制表符分隔元素
             menu_parsed[meal_order, row, column] = item
 
+            # 尽管没遇到过菜数不是9的情况，但还是别把它写死吧
+            if (column == 0) and (item != ' '):
+                course_count += 1
+            # 用于记录必套餐的编号，以处理套餐编号不是0的特殊情况
+            if (column == 3) and (item == '套餐'):
+                set_meal = row
+            # 用于记录必选菜的编号，以处理必选菜不在最后的特殊情况
             if (column == 4) and (item == '必选'):
-                required_course = row  # 用于记录必选菜的编号，以处理必选菜不在最后的特殊情况
+                required_course = row
 
             column += 1
             if i % 9 == 8:
                 column = 0
                 row += 1
                 print()  # 换行打印
+
+        # 先准备已经订购的菜的份数
+        for course in range(0, course_count):
+            course_amount[meal_order, course] = int(menu_parsed[meal_order, course, 7])
+
         if meal_order in selected_checkbox_list:
             print('\n此餐已被选上“不定餐”')
             not_order = True
@@ -237,11 +250,11 @@ while True:
             not_order = False
 
         # 修改菜单
-        if (menu_parsed[meal_order, 9, 3] == ' '):  # 参考reference.txt附上的两份菜单，just a dirty trick
+        if (menu_parsed[meal_order, course_count, 3] == ' '):  # 参考reference.txt附上的两份菜单，just a dirty trick
             print('菜单无法更改')
             menu_mutable = False
             continue
-        elif (menu_parsed[meal_order, 9, 3] == '合计:'):
+        elif (menu_parsed[meal_order, course_count, 3] == '合计:'):
             print('\n菜单可更改')  # 如果菜单是可以提交的，那么最后一行会少3列。一般每行有9列。故在此插入换行符，以取得较统一的效果
             menu_mutable = True
 
@@ -252,16 +265,16 @@ while True:
 
             order_status = input("请问您要定这一餐吗？输N不订餐，输其他字符继续").strip().capitalize()
             if 'N' in order_status:
-                # 由于浏览器的行为是在选中“不订餐”后立即向服务器发送状态变化的请求，而如果这么干有些浪费时间，故把这些留到最后提交
+                # 由于浏览器的行为是在选中“不订餐”后立即向服务器发送状态变化的请求，而这么干有些浪费时间，故把这些留到最后提交
                 if not not_order:
                     selected_checkbox_list.append(meal_order)
                     to_change_status.append(meal_order)
                     to_select.append(meal_order)
 
                 # 用来占位，不然服务器不认
-                for course in range(0, 8+1):
-                    callbackparam = '{0}Repeater1_GvReport_{1}_TxtNum_{2}@0|'.format(
-                        callbackparam,  # 拼起来
+                for course in range(0, course_count):
+                    submit_form_string = '{0}Repeater1_GvReport_{1}_TxtNum_{2}@0|'.format(
+                        submit_form_string,  # 拼起来
                         meal_order,
                         course
                     )
@@ -273,31 +286,39 @@ while True:
                     to_change_status.append(meal_order)
                     to_deselect.append(meal_order)
 
-                for course in range(0, 8+1):  # course n. a part of a meal served at one time
-                    print('\n编号：{0} 菜名：{1} 单价：{2} 最大份数：{3}'.format(
+                print('若您不需要改变订购份数，直接按Enter即可')
+                for course in range(0, course_count):
+                    print('\n编号：{0} 菜名：{1} 单价：{2} 最大份数：{3} 已定份数：{4}'.format(
                         menu_parsed[meal_order, course, 0],
                         menu_parsed[meal_order, course, 2],
                         menu_parsed[meal_order, course, 5],
-                        menu_parsed[meal_order, course, 6]
-                        ))
+                        menu_parsed[meal_order, course, 6],
+                        menu_parsed[meal_order, course, 7]
+                    ))
                     while course != required_course:
-                        course_num = input('直接Enter就当作是0\n请输入您要点的份数：')
-                        # 如果直接敲Enter，就当作是0
+                        course_num = input('请输入您要点的份数：')
+                        # 如果直接敲Enter，就跳出循环，因为原始值已经在course_amount里了
                         if not course_num:
-                            course_num = 0
-                        course_num = int(course_num)
-                        if 0 <= course_num <= int(menu_parsed[meal_order, course, 6]):
-                            course_amount[meal_order, course] = course_num  # 将份数放入字典
                             break
                         else:
-                            print('请输入一个大于等于0且小于等于{0}的整数'.format(
-                                menu_parsed[meal_order, course, 6]))
-                            continue
-                    course_amount[meal_order, required_course] = 1  # 放入必选菜
+                            course_num = int(course_num)
+                            if 0 <= course_num <= int(menu_parsed[meal_order, course, 6]):
+                                course_amount[meal_order, course] = course_num  # 将份数放入字典
+                                break
+                            else:
+                                print('请输入一个大于等于0且小于等于{0}的整数'.format(
+                                    menu_parsed[meal_order, course, 6]))
+                                continue
 
-                for course in range(0, 8+1):
-                    callbackparam = '{0}Repeater1_GvReport_{1}_TxtNum_{2}@{3}|'.format(
-                        callbackparam,  # 拼起来
+                    # 如果选了套餐，就不需要选择必选菜了
+                    if course_amount[meal_order, set_meal] == 1:
+                        course_amount[meal_order, required_course] = 0
+                    elif course_amount[meal_order, set_meal] == 0:
+                        course_amount[meal_order, required_course] = 1  # 放入必选菜
+
+                for course in range(0, course_count):
+                    submit_form_string = '{0}Repeater1_GvReport_{1}_TxtNum_{2}@{3}|'.format(
+                        submit_form_string,  # 拼起来
                         meal_order,
                         course,
                         course_amount[meal_order, course]
@@ -347,7 +368,7 @@ while True:
 
         logined_skeleton_form.update({
             '__CALLBACKID': '__Page',
-            '__CALLBACKPARAM': callbackparam
+            '__CALLBACKPARAM': submit_form_string
         })
         headers['Referer'] = menu_page_url + '?Date=' + date  # 更新Referer
         print('\n正在提交菜单')
