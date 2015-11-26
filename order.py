@@ -431,7 +431,7 @@ def main():
                         to_select.append(meal_order)
 
                     # 用来占位，不然服务器不认
-                    for course in range(0, course_count):
+                    for course in range(0, course_count[meal_order]):
                         course_amount[meal_order, course] = 0
                     continue
                 else:
