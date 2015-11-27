@@ -59,14 +59,15 @@ def login_cas(username, password, jsessionid):
 
 
 def login_card_system():
-    """登录“一卡通”系统，返回值为用户的姓名"""
+    """登录“一卡通”系统，返回值为用户的姓名和卡中的余额"""
     card_login_headers = skeleton_headers.copy()
     card_login_headers['Referer'] = 'http://gzb.szsy.cn:4000/lcconsole/login!getSSOMessage.action'
     card_login = opener.get(CARD_SYSTEM_LOGIN_URL, headers=card_login_headers)
     order_welcome_page = card_login.text  # 此处会302到欢迎页
     name = re.search(r'<span id="LblUserName">当前用户：(.*?)<\/span>', order_welcome_page).group(1)
+    balance = re.search(r'<span id="LblBalance">帐户余额：(.*?)元<\/span>', order_welcome_page).group(1)
 
-    return name
+    return name, balance
 
 
 def get_viewstate(page):
@@ -311,8 +312,9 @@ def main():
             break
 
     print('正在登录校卡系统')
-    student_name = login_card_system()
+    student_name, card_balance = login_card_system()
     print("\n欢迎，{0}".format(student_name))
+    print("您的卡上还有", card_balance, "元")
 
     print('正在初始化日期列表')
     calendar_page, viewstate_calendar, eventvalidation_calendar = get_default_calendar()
