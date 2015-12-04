@@ -30,7 +30,7 @@ opener = requests.Session()
 
 
 def get_jsessionid():
-    """返回登陆表单的提交地址"""
+    """返回JSESSIONID"""
     login_page = opener.get(LOGIN_URL, headers=skeleton_headers)
     jsessionid = re.search('jsessionid=(.*?)"', login_page.text).group(1)
     return jsessionid
@@ -48,7 +48,7 @@ def login_cas(username, password, jsessionid):
         'password': password,
         'lt': 'e1s1',
         '_eventId': 'submit',
-        'submit': '登陆'
+        'submit': '登录'
     }
     cas_login_headers = skeleton_headers.copy()
     cas_login_headers['Referer'] = LOGIN_URL
