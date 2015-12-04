@@ -29,24 +29,27 @@ MEAL_NAME = ('早餐', '午餐', '晚餐')
 opener = requests.Session()
 
 
-def get_jsessionid():
-    """返回JSESSIONID"""
-    login_page = opener.get(LOGIN_URL, headers=skeleton_headers)
-    jsessionid = re.search('jsessionid=(.*?)"', login_page.text).group(1)
-    return jsessionid
-
-
-def login_cas(username, password, jsessionid):
+def login_cas(username, password):
     """
     教务系统使用CAS中央登陆，以是否存在跳转页面的特征判断登录是否成功，返回值为登录状态
     见reference.txt
-    参数为用户名, 密码, JSESSIONID
+    参数为用户名, 密码
     """
-    login_post_url = LOGIN_URL + ';jsessionid=' + jsessionid
+    login_page = opener.get(LOGIN_URL, headers=skeleton_headers)
+    jsessionid = re.search('jsessionid=(.*?)"', login_page.text)
+    # 据观察，只有在第一次访问，即Cookie中没有JSESSIONID时，页面中的地址才会带上JSESSIONID
+    # 说真的，这步没啥必要。不过，尽量模拟得逼真点吧
+    # 而lt是会变化的，所以用这种有些耗流量的方式实现
+    if jsessionid:
+        login_post_url = LOGIN_URL + ';jsessionid=' + jsessionid.group(1)
+    else:
+        login_post_url = LOGIN_URL
+    lt = re.search('name="lt" value="(.*?)"', login_page.text).group(1)
+
     login_form = {
         'username': username,
         'password': password,
-        'lt': 'e1s1',
+        'lt': lt,
         '_eventId': 'submit',
         'submit': '登录'
     }
@@ -169,6 +172,7 @@ def parse_menu(page):
     course_count = [0 for x in range(0, menu_count)]  # course n. a part of a meal served at one time
     menu_parsed = {}
     for meal_order in range(0, menu_count):  # 这是个半闭半开的区间[a,b)，且GvReport是从0开始编号的，故不用+1
+        # https://docs.python.org/3/library/stdtypes.html#str.format
         xpath_menu = '//table[@id="Repeater1_GvReport_{0}"]/tr/td//text()'.format(meal_order)
         menu_item = menu_tree.xpath(xpath_menu)
 
@@ -286,12 +290,6 @@ def submit_menu(date, course_amount, do_not_order_list, to_select, to_deselect, 
 def main():
     print('深圳实验学校高中部网上订餐系统CLI客户端')
 
-    # 获得JSESSIONID
-    print('正在初始化')
-    jsessionid = get_jsessionid()
-    # https://docs.python.org/3/library/stdtypes.html#str.format
-    # 说真的，上面那步没啥必要。不过，尽量模拟得逼真点吧
-
     while True:
         student_id = int(input('\n输完按Enter\n请输入学号：'))
         if len(str(student_id)) == 7:
@@ -303,9 +301,9 @@ def main():
         password = getpass('请输入密码：')
 
         print('正在进行中央登录')
-        logined = login_cas(student_id, password, jsessionid)
+        logined = login_cas(student_id, password)
 
-        if not logined:  # 若登录失败，由于被重定向回登陆页，login_cas会返回False
+        if not logined:  # 若登录失败，由于被重定向回登陆页，login_cas()会返回False
             print('登录失败，请检查学号和密码是否正确')
             continue
         else:
