@@ -29,22 +29,25 @@ MEAL_NAME = ('早餐', '午餐', '晚餐')
 opener = requests.Session()
 
 
-def login_cas(username, password):
+def login_cas(username, password, cas_param=None):
     """
-    教务系统使用CAS中央登陆，以是否存在跳转页面的特征判断登录是否成功，返回值为登录状态
-    见reference.txt
-    参数为用户名, 密码
+    教务系统使用CAS中央登陆，以是否存在跳转页面的特征判断登录是否成功，见reference.txt
+    参数为用户名, 密码, 上次登录返回的[jsessionid, lt]
+    若成功，返回None
+    若失败，返回下次登陆需要的JSESSIONID和lt
     """
-    login_page = opener.get(LOGIN_URL, headers=skeleton_headers)
-    jsessionid = re.search('jsessionid=(.*?)"', login_page.text)
-    # 据观察，只有在第一次访问，即Cookie中没有JSESSIONID时，页面中的地址才会带上JSESSIONID
-    # 说真的，这步没啥必要。不过，尽量模拟得逼真点吧
-    # 而lt是会变化的，所以用这种有些耗流量的方式实现
-    if jsessionid:
-        login_post_url = LOGIN_URL + ';jsessionid=' + jsessionid.group(1)
+    if cas_param is None:
+        # 据观察，只有在第一次访问，即Cookie中没有JSESSIONID时，页面中的地址才会带上JSESSIONID
+        # 说真的，这步没啥必要。不过，尽量模拟得逼真点吧
+        # 而lt是会变化的
+        login_page = opener.get(LOGIN_URL, headers=skeleton_headers)
+        jsessionid = re.search('jsessionid=(.*?)"', login_page.text).group(1)
+        lt = re.search('name="lt" value="(.*?)"', login_page.text).group(1)
+        login_post_url = LOGIN_URL + ';jsessionid=' + jsessionid
     else:
+        jsessionid = cas_param[0]
+        lt = cas_param[1]
         login_post_url = LOGIN_URL
-    lt = re.search('name="lt" value="(.*?)"', login_page.text).group(1)
 
     login_form = {
         'username': username,
@@ -58,7 +61,12 @@ def login_cas(username, password):
     auth = opener.post(login_post_url, login_form, headers=cas_login_headers)
     auth_status = '<SCRIPT LANGUAGE="JavaScript">' in auth.text
 
-    return auth_status
+    if auth_status:
+        return None
+    else:
+        # lt是会变化的
+        lt = re.search('name="lt" value="(.*?)"', auth.text).group(1)
+        return [jsessionid, lt]
 
 
 def login_card_system():
@@ -290,6 +298,8 @@ def submit_menu(date, course_amount, do_not_order_list, to_select, to_deselect, 
 def main():
     print('深圳实验学校高中部网上订餐系统CLI客户端')
 
+    # 记录login_cas返回值。若登录失败，可以复用上次登录返回的页面中的lt
+    auth_return = None
     while True:
         student_id = int(input('\n输完按Enter\n请输入学号：'))
         if len(str(student_id)) == 7:
@@ -301,9 +311,9 @@ def main():
         password = getpass('请输入密码：')
 
         print('正在进行中央登录')
-        logined = login_cas(student_id, password)
+        auth_return = login_cas(student_id, password, auth_return)
 
-        if not logined:  # 若登录失败，由于被重定向回登陆页，login_cas()会返回False
+        if auth_return:  # 若登录失败，由于被重定向回登陆页，login_cas()会返回一个list
             print('登录失败，请检查学号和密码是否正确')
             continue
         else:
@@ -326,7 +336,8 @@ def main():
 
     while True:
         # 检查日期
-        date = input('要是想得到别的月份的菜单，输一个那个月的日期\n请输入日期（格式如：2015-09-30）：')
+        print('要是想得到别的月份的菜单，输一个那个月的日期')
+        date = input('格式为：年-月-日，如：2015-9-30\n请输入日期：')
         date_splited = date.split('-')
         # 统一宽度。这样就能够处理2015-9-3这种“格式错误”的日期了
         date = '{0}-{1}-{2}'.format(
