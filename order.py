@@ -75,8 +75,8 @@ def login_card_system():
     card_login_headers['Referer'] = 'http://gzb.szsy.cn:4000/lcconsole/login!getSSOMessage.action'
     card_login = opener.get(CARD_SYSTEM_LOGIN_URL, headers=card_login_headers)
     order_welcome_page = card_login.text  # 此处会302到欢迎页
-    name = re.search(r'<span id="LblUserName">当前用户：(.*?)<\/span>', order_welcome_page).group(1)
-    balance = re.search(r'<span id="LblBalance">帐户余额：(.*?)元<\/span>', order_welcome_page).group(1)
+    name = re.search(r'<span id="LblUserName">当前用户：(.*?)</span>', order_welcome_page).group(1)
+    balance = re.search(r'<span id="LblBalance">帐户余额：(.*?)元</span>', order_welcome_page).group(1)
 
     return name, balance
 
@@ -159,57 +159,92 @@ def get_menu(date):
     return menu_tidied, viewstate, eventvalidation
 
 
-def get_do_not_order_list(page):
-    """参数为菜单页，返回一个不订餐的餐次列表"""
-    do_not_order_list = [int(x) for x in
-                         re.findall(r'name="Repeater1\$ctl0(\d)\$CbkMealtimes" checked="checked"', page)]
-    return do_not_order_list
-
-
-def parse_menu(page):
+def get_course_count(page, menu_sequence):
     """
-    解析菜单
-    返回值为解析后的菜单, 当日的餐数, 每餐菜的道数,
-    已订购的菜的份数, 已勾选“不订餐”的餐次列表
+    :rtype: int
     """
-
-    # 只有装着菜单的table是带"id"属性的
-    menu_count = len(re.findall(r'id="Repeater1_GvReport_(\d)"', page))
-
-    menu_tree = html.fromstring(page)
-    course_count = [0 for x in range(0, menu_count)]  # course n. a part of a meal served at one time
-    menu_parsed = {}
-    for meal_order in range(0, menu_count):  # 这是个半闭半开的区间[a,b)，且GvReport是从0开始编号的，故不用+1
-        # https://docs.python.org/3/library/stdtypes.html#str.format
-        xpath_menu = '//table[@id="Repeater1_GvReport_{0}"]/tr/td//text()'.format(meal_order)
-        menu_item = menu_tree.xpath(xpath_menu)
-
-        # 由于Python中没有多维数组，而我嫌初始化一个"list of list of list"太麻烦了
-        # 故使用一个字典，(餐次, 编号, 列数) = '原表格内容'
-        row = 0
-        column = 0
-        for i, item in enumerate(menu_item):
-            menu_parsed[meal_order, row, column] = item
-
-            # 尽管没遇到过菜数不是9的情况，但还是别把它写死吧
-            if (column == 0) and (item != ' '):
-                course_count[meal_order] += 1
-
-            column += 1
-            if i % 9 == 8:
-                column = 0
-                row += 1
-
-    return menu_parsed, menu_count, course_count
+    return len(re.findall(r'Repeater1_GvReport_{0}_LblMaxno_\d'.format(menu_sequence), page)) - 1
 
 
-def get_course_amount(menu, menu_count, course_count):
+class Course(object):
+    def __init__(self, seq, course):
+        self.id = seq
+        self.num = int(course[0])
+        self.type = course[1]
+        self.name = course[2]
+        self.price = float(course[5])
+        self.max = int(course[6])
+        self.current = int(course[7])
+
+
+class Meal(dict):
+    def __init__(self, seq, menu_list, course_count):
+        self.max = course_count
+        self.required_course = []
+        self.id = seq
+
+        for course_seq in range(course_count):
+            start = 9 * course_seq
+            end = 9 * (course_seq + 1)
+            l = menu_list[start:end]
+            # 用于记录必选菜的编号，以处理必选菜不在最后的特殊情况
+            if l[4] == '必选':
+                self.required_course.append(course_seq)
+            self[course_seq] = Course(course_seq, l)
+
+    def __next__(self):
+        if self.__current < self.max:
+            course = self[self.__current]
+            self.__current += 1
+            return course
+        else:
+            raise StopIteration
+
+    def __iter__(self):
+        self.__current = 0
+        return self
+
+
+class Menu(dict):
+    def __init__(self, page):
+        # 只有装着菜单的table是带"id"属性的
+        self.meal_count = len(re.findall(r'id="Repeater1_GvReport_(\d)"', page))
+        self.do_not_order = [int(x) for x in
+                             re.findall(r'name="Repeater1\$ctl0(\d)\$CbkMealtimes" checked="checked"', page)]
+
+        if '<a onclick="return subs();"' in page:
+            self.mutable = True
+        elif '<a onclick="return msg();"' in page:
+            self.mutable = False
+
+        tree = html.fromstring(page)
+        # 尽管没遇到过菜数不是9的情况，但还是别把它写死吧
+        course_count = [get_course_count(page, x) for x in range(0, self.meal_count)]
+        for meal_seq in range(self.meal_count):
+            xpath = '//table[@id="Repeater1_GvReport_{0}"]/tr/td//text()'.format(meal_seq)
+            menu_item = tree.xpath(xpath)
+            self[meal_seq] = Meal(meal_seq, menu_item, course_count[meal_seq])
+
+    def __next__(self):
+        if self.__current < self.meal_count:
+            meal = self[self.__current]
+            self.__current += 1
+            return meal
+        else:
+            raise StopIteration
+
+    def __iter__(self):
+        self.__current = 0
+        return self
+
+
+def get_course_amount(menu):
     """参数为菜单字典，当日的餐数，每餐的道数。返回值为菜单中已订菜的数量的字典"""
     course_amount = {}
-    for meal_order in range(0, menu_count):
-        for course in range(0, course_count[meal_order]):
+    for meal in menu:
+        for course in meal:
             # (餐次, 编号) = 数量
-            course_amount[meal_order, course] = int(menu[meal_order, course, 7])
+            course_amount[meal.id, course.id] = course.current
 
     return course_amount
 
@@ -220,7 +255,7 @@ def gen_menu_param(course_amount):
     for k, v in course_amount.items():
         # {0}用于和自己拼在一起。{1[0]}为key中的第一个数，即meal_order，{1[1]}即course
         param_string = '{0}Repeater1_GvReport_{1[0]}_TxtNum_{1[1]}@{2}|'.format(
-            param_string, k, v
+                param_string, k, v
         )
 
     return param_string
@@ -261,9 +296,9 @@ def submit_menu(date, course_amount, do_not_order_list, to_select, to_deselect, 
 
             submit_menu_form['__EVENTTARGET'] = box_id
             submit_do_not_order = opener.post(
-                MENU_URL,
-                submit_menu_form,
-                params={'Date': date}
+                    MENU_URL,
+                    submit_menu_form,
+                    params={'Date': date}
             )
             submit_return_page = submit_do_not_order.text
 
@@ -285,10 +320,10 @@ def submit_menu(date, course_amount, do_not_order_list, to_select, to_deselect, 
     })
 
     post_menu = opener.post(
-        MENU_URL,
-        submit_menu_form,
-        params={'Date': date},
-        headers=submit_menu_headers
+            MENU_URL,
+            submit_menu_form,
+            params={'Date': date},
+            headers=submit_menu_headers
     )
     status = '订餐成功！' in post_menu.text
 
@@ -341,9 +376,9 @@ def main():
         date_splited = date.split('-')
         # 统一宽度。这样就能够处理2015-9-3这种“格式错误”的日期了
         date = '{0}-{1}-{2}'.format(
-            date_splited[0].zfill(4),
-            date_splited[1].zfill(2),
-            date_splited[2].zfill(2)
+                date_splited[0].zfill(4),
+                date_splited[1].zfill(2),
+                date_splited[2].zfill(2)
         )
         month = date_splited[0] + '-' + date_splited[1].lstrip('0')
         # 首先，确认它是个正确的日期
@@ -369,8 +404,8 @@ def main():
         else:  # 若输入的日期不存在，向服务器查询输入的月份
             print('正在获取对应月份的订餐日期列表')
             date_page, viewstate_calendar, eventvalidation_calendar = query_calendar(
-                date_splited[0], date_splited[1],
-                viewstate_calendar, eventvalidation_calendar
+                    date_splited[0], date_splited[1],
+                    viewstate_calendar, eventvalidation_calendar
             )
 
             date_list_current = parse_date_list(date_page)
@@ -393,91 +428,86 @@ def main():
         # 拉菜单
         print('正在获取菜单')
         menu_page, viewstate_menu, eventvalidation_menu = get_menu(date)
-        do_not_order_list = get_do_not_order_list(menu_page)
-        menu, menu_count, course_count = parse_menu(menu_page)
-        course_amount = get_course_amount(menu, menu_count, course_count)
+        menu = Menu(menu_page)
+        course_amount = get_course_amount(menu)
 
         # 准备记录“不订餐”状态变化的餐次的列表
         to_select = []
         to_deselect = []
 
         print('{0}，星期{1}'.format(date, date_object.isoweekday()))
-        for meal_order in range(0, menu_count):
+        for meal in menu:
             # 打印菜单
-            print('\n{0}菜单'.format(MEAL_NAME[meal_order]))
+            print('\n{0}菜单'.format(MEAL_NAME[meal.id]))
             print('编号\t类别\t菜名\t\t单价\t最大份数\t订购份数\t订餐状态')
-            for course in range(0, course_count[meal_order]):
+            for course in meal:
                 print('\t'.join([
-                    menu[meal_order, course, 0],
-                    menu[meal_order, course, 1],
-                    menu[meal_order, course, 2],
-                    menu[meal_order, course, 5],
-                    menu[meal_order, course, 6],
-                    menu[meal_order, course, 7],
-                    menu[meal_order, course, 8]]
-                ))
+                    str(course.num),
+                    course.type,
+                    course.name,
+                    str(course.price),
+                    str(course.max),
+                    str(course.current)
+                ]))
 
-            if meal_order in do_not_order_list:
+            if meal.id in menu.do_not_order:
                 print('\n此餐已被选上“不定餐”')
                 do_not_order = True
             else:
                 do_not_order = False
 
             # 修改菜单
-            if menu[meal_order, course_count[meal_order], 3] == ' ':  # 参考reference.txt附上的两份菜单，just a dirty trick
+            if not menu.mutable:
                 print('菜单无法更改')
-                menu_mutable = False
                 continue
-            elif menu[meal_order, course_count[meal_order], 3] == '合计:':
-                print('\n菜单可更改')  # 如果菜单是可以提交的，那么最后一行会少3列。一般每行有9列。故在此插入换行符，以取得 较统一的效果
-                menu_mutable = True
+            else:
+                print('\n菜单可更改')  # 如果菜单是可以提交的，那么最后一行会少3列。一般每行有9列。故在此插入换行符，以取得较统一的效果
                 set_meal_selected = False
-                # 用于记录必选菜的编号，以处理必选菜不在最后的特殊情况
-                required_course = []
 
                 order_status = input("请问您要定这一餐吗？输N不订餐，输其他字符继续").strip().capitalize()
                 if 'N' in order_status:
                     # 由于浏览器的行为是在选中“不订餐”后立即向服务器发送状态变化的请求，而这么干有些浪费时间，故把这些留到最后提交
                     if not do_not_order:
-                        to_select.append(meal_order)
+                        to_select.append(meal.id)
 
                     # 用来占位，不然服务器不认
-                    for course in range(0, course_count[meal_order]):
-                        course_amount[meal_order, course] = 0
+                    for course in meal:
+                        course_amount[meal.id, course.id] = 0
                     continue
                 else:
                     # 与上文的那个判断一起，为提交作准备
                     if do_not_order:
-                        to_deselect.append(meal_order)
+                        to_deselect.append(meal.id)
 
                     print('若您不需要改变订购份数，直接按Enter即可')
-                    for course in range(0, course_count[meal_order]):
+                    required_course = []
+                    for course in meal:
                         print('\n编号：{0} 菜名：{1} 单价：{2} 最大份数：{3} 已定份数：{4}'.format(
-                            menu[meal_order, course, 0],
-                            menu[meal_order, course, 2],
-                            menu[meal_order, course, 5],
-                            menu[meal_order, course, 6],
-                            menu[meal_order, course, 7]
+                                course.id,
+                                course.name,
+                                course.price,
+                                course.max,
+                                course.current
                         ))
-                        while not menu[meal_order, course, 4] == '必选':
+                        while not course.type == '必订菜':
                             course_num = input('请输入您要点的份数：')
                             # 如果直接敲Enter，就跳出循环，因为原始值已经在course_amount里了
                             if not course_num:
                                 break
                             else:
                                 course_num = int(course_num)
-                                if 0 <= course_num <= int(menu[meal_order, course, 6]):
-                                    course_amount[meal_order, course] = course_num  # 将份数放入字典
+                                if 0 <= course_num <= course.max:
+                                    course_amount[meal.id, course.id] = course_num  # 将份数放入字典
                                     # 订了套餐就不用特意去订必选菜了
-                                    if course_num == 1 and menu[meal_order, course, 3] == '套餐':
+                                    if course_num == 1 and course.type == '套餐':
                                         set_meal_selected = True
                                     break
                                 else:
                                     print('请输入一个大于等于0且小于等于{0}的整数'.format(
-                                        menu[meal_order, course, 6]))
+                                            course.max))
                                     continue
-                        if menu[meal_order, course, 4] == '必选':
-                            required_course.append(course)
+                        if course.type == '必订菜':
+                            required_course.append(course.id)
 
                     # 放入必选菜
                     # 我也不知道会不会有某一餐有多道必选菜，所以最好还是不要写死了
@@ -487,14 +517,14 @@ def main():
                         course_num = 1
 
                     for course in required_course:
-                        course_amount[meal_order, course] = course_num
+                        course_amount[meal.id, course] = course_num
 
-        if menu_mutable:
+        if menu.mutable:
             print('正在提交菜单')
             post_status = submit_menu(
-                date, course_amount,
-                do_not_order_list, to_select, to_deselect,
-                viewstate_menu, eventvalidation_menu)
+                    date, course_amount,
+                    menu.do_not_order, to_select, to_deselect,
+                    viewstate_menu, eventvalidation_menu)
 
             if post_status:
                 print('\n订餐成功')
