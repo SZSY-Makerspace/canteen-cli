@@ -32,9 +32,14 @@ opener = requests.Session()
 def login_cas(username, password, cas_param=None):
     """
     教务系统使用CAS中央登陆，以是否存在跳转页面的特征判断登录是否成功，见reference.txt
-    参数为用户名, 密码, 上次登录返回的[jsessionid, lt]
     若成功，返回None
     若失败，返回下次登陆需要的JSESSIONID和lt
+    :type username: str
+    :type password: str
+    :type cas_param: list
+    :param username: 用户名
+    :param password: 密码
+    :param cas_param: 上次登录返回的[jsessionid, lt]
     """
     if cas_param is None:
         # 据观察，只有在第一次访问，即Cookie中没有JSESSIONID时，页面中的地址才会带上JSESSIONID
@@ -82,13 +87,21 @@ def login_card_system():
 
 
 def get_viewstate(page):
-    """从页面中得到VIEWSTATE"""
+    """
+    从页面中得到VIEWSTATE
+    :type page: str
+    :rtype: str
+    """
     viewstate = re.search(r'id="__VIEWSTATE" value="(.*?)"', page).group(1)
     return viewstate
 
 
 def get_eventvalidation(page):
-    """从页面中得到EVENTVALIDATION"""
+    """
+    从页面中得到EVENTVALIDATION
+    :type page: str
+    :rtype: str
+    """
     eventvalidation = re.search(r'id="__EVENTVALIDATION" value="(.*?)"', page).group(1)
     return eventvalidation
 
@@ -106,14 +119,21 @@ def get_default_calendar():
 
 
 def parse_date_list(page):
-    """用来解析选择日期的页面，得到可查询的日期的列表"""
+    """
+    用来解析选择日期的页面，得到可查询的日期的列表
+    :type page: str
+    :rtype: list
+    """
     date_list = re.findall(r'href="RestaurantUserMenu\.aspx\?Date=(\d{4}-\d{1,2}-\d{1,2})"', page)
 
     return date_list
 
 
 def parse_default_calendar(page):
-    """解析第一次得到的选择日期的页面，返回日期列表，已查询的月份，可查询的年份"""
+    """
+    解析第一次得到的选择日期的页面，返回日期列表，已查询的月份，可查询的年份
+    :type page: str
+    """
     selected_year = re.search(r'<option selected="selected" value="\d{4}">(\d{4})<\/option>', page).group(1)
     selected_month = re.search(r'<option selected="selected" value="\d{1,2}">(\d{1,2})月<\/option>', page).group(1)
     selectable_year = re.findall(r'value="(\d{4})"', page)
@@ -124,14 +144,21 @@ def parse_default_calendar(page):
 
 
 def query_calendar(year, month, viewstate, eventvalidation):
-    """查询对应月份的菜单，返回值为选择日期的页面, VIEWSTATE, EVENTVALIDATION"""
+    """查询对应月份的菜单，返回值为选择日期的页面, VIEWSTATE, EVENTVALIDATION
+    :type year: int
+    :type month: int
+    :type viewstate: str
+    :type eventvalidation: str
+    :param year: 菜单的年份
+    :param month: 菜单的月份
+    """
     query_calendar_form = logined_skeleton_form.copy()
     query_calendar_form.update({
         '__EVENTTARGET': 'DrplstMonth1$DrplstControl',
         '__VIEWSTATE': viewstate,
         '__EVENTVALIDATION': eventvalidation,
         'DrplstYear1$DrplstControl': year,
-        'DrplstMonth1$DrplstControl': month.lstrip('0')
+        'DrplstMonth1$DrplstControl': month
     })
     query_calendar_headers = skeleton_headers.copy()
     query_calendar_headers['Referer'] = CALENDAR_URL
@@ -144,7 +171,10 @@ def query_calendar(year, month, viewstate, eventvalidation):
 
 
 def get_menu(date):
-    """获得给定日期的菜单，返回菜单的页面，VIEWSTATE和EVENTVALIDATION"""
+    """
+    获得给定日期的菜单，返回菜单的页面，VIEWSTATE和EVENTVALIDATION
+    :type date: string
+    """
     get_menu_headers = skeleton_headers.copy()
     get_menu_headers['Referer'] = CALENDAR_URL
     menu = opener.get(MENU_URL, params={'Date': date}, headers=get_menu_headers)
@@ -161,9 +191,12 @@ def get_menu(date):
 
 def get_course_count(page, menu_sequence):
     """
+    :type page: str
+    :type menu_sequence: int
+    :param menu_sequence: 这一餐的序号
     :rtype: int
     """
-    return len(re.findall(r'Repeater1_GvReport_{0}_LblMaxno_\d'.format(menu_sequence), page)) - 1
+    return len(re.findall(r'Repeater1_GvReport_{0}_LblMaxno_\d'.format(menu_sequence), page))
 
 
 class Course(object):
@@ -177,9 +210,8 @@ class Course(object):
         self.current = int(course[7])
 
 
-class Meal(dict):
+class Meal(list):
     def __init__(self, seq, menu_list, course_count):
-        self.max = course_count
         self.required_course = []
         self.id = seq
 
@@ -190,25 +222,13 @@ class Meal(dict):
             # 用于记录必选菜的编号，以处理必选菜不在最后的特殊情况
             if l[4] == '必选':
                 self.required_course.append(course_seq)
-            self[course_seq] = Course(course_seq, l)
-
-    def __next__(self):
-        if self.__current < self.max:
-            course = self[self.__current]
-            self.__current += 1
-            return course
-        else:
-            raise StopIteration
-
-    def __iter__(self):
-        self.__current = 0
-        return self
+            self.append(Course(course_seq, l))
 
 
-class Menu(dict):
+class Menu(list):
     def __init__(self, page):
         # 只有装着菜单的table是带"id"属性的
-        self.meal_count = len(re.findall(r'id="Repeater1_GvReport_(\d)"', page))
+        meal_count = len(re.findall(r'id="Repeater1_GvReport_(\d)"', page))
         self.do_not_order = [int(x) for x in
                              re.findall(r'name="Repeater1\$ctl0(\d)\$CbkMealtimes" checked="checked"', page)]
 
@@ -218,28 +238,21 @@ class Menu(dict):
             self.mutable = False
 
         tree = html.fromstring(page)
-        # 尽管没遇到过菜数不是9的情况，但还是别把它写死吧
-        course_count = [get_course_count(page, x) for x in range(0, self.meal_count)]
-        for meal_seq in range(self.meal_count):
+        for meal_seq in range(meal_count):
+            # 尽管没遇到过菜数不是9的情况，但还是别把它写死吧
+            course_count = get_course_count(page, meal_seq)
             xpath = '//table[@id="Repeater1_GvReport_{0}"]/tr/td//text()'.format(meal_seq)
             menu_item = tree.xpath(xpath)
-            self[meal_seq] = Meal(meal_seq, menu_item, course_count[meal_seq])
-
-    def __next__(self):
-        if self.__current < self.meal_count:
-            meal = self[self.__current]
-            self.__current += 1
-            return meal
-        else:
-            raise StopIteration
-
-    def __iter__(self):
-        self.__current = 0
-        return self
+            self.append(Meal(meal_seq, menu_item, course_count))
 
 
 def get_course_amount(menu):
-    """参数为菜单字典，当日的餐数，每餐的道数。返回值为菜单中已订菜的数量的字典"""
+    """
+    参数为菜单。返回值为菜单中已订菜的数量的字典
+    :type menu: Menu
+    :param menu: 菜单
+    :rtype: dict
+    """
     course_amount = {}
     for meal in menu:
         for course in meal:
@@ -250,7 +263,11 @@ def get_course_amount(menu):
 
 
 def gen_menu_param(course_amount):
-    """参数为course_amount这个dict，返回值为CALLBACKPARAM"""
+    """
+    参数为course_amount这个dict，返回值为CALLBACKPARAM
+    :type course_amount: dict
+    :rtype: str
+    """
     param_string = ''
     for k, v in course_amount.items():
         # {0}用于和自己拼在一起。{1[0]}为key中的第一个数，即meal_order，{1[1]}即course
@@ -263,10 +280,22 @@ def gen_menu_param(course_amount):
 
 def submit_menu(date, course_amount, do_not_order_list, to_select, to_deselect, viewstate, eventvalidation):
     """
-    参数为提交菜单的日期, 菜的数量,
-    原页面已勾选“不订餐”的餐次, 要改变“不订餐”状态的餐次, 要“不订餐”的餐次, 要取消“不订餐的餐次,
-    菜单页的VIEWSTATE和EVENTVALIDATION
     返回是否成功的Bool
+    :type date: str
+    :type course_amount: dict
+    :type do_not_order_list: list
+    :type to_select: list
+    :type to_deselect: list
+    :type viewstate: str
+    :type eventvalidation: str
+    :param date: 提交菜单的日期
+    :param course_amount: 菜的数量
+    :param do_not_order_list: 原页面已勾选“不订餐”的餐次
+    :param to_select: 要“不订餐”的餐次
+    :param to_deselect: 要取消“不订餐”的餐次
+    :param viewstate: 菜单页的VIEWSTATE
+    :param eventvalidation: 菜单页的EVENTVALIDATION
+    :rtype: bool
     """
     submit_menu_form = logined_skeleton_form.copy()
     submit_menu_form.update({
@@ -278,14 +307,14 @@ def submit_menu(date, course_amount, do_not_order_list, to_select, to_deselect, 
     submit_menu_headers = skeleton_headers.copy()
     submit_menu_headers['Referer'] = MENU_URL + '?Date=' + date
 
+    # 把原页面已勾选“不订餐”的放入表单
+    for meal_order in do_not_order_list:
+        box_id = 'Repeater1$ctl0{0}$CbkMealtimes'.format(meal_order)
+        submit_menu_form[box_id] = 'on'
+
     # 用来模拟浏览器的做法，提交“不订餐”的变化
     # 要一个一个加，一个一个减
     if to_select + to_deselect:
-        # 把原页面已勾选“不订餐”的放入表单
-        for meal_order in do_not_order_list:
-            box_id = 'Repeater1$ctl0{0}$CbkMealtimes'.format(meal_order)
-            submit_menu_form[box_id] = 'on'
-
         for meal_order in to_select + to_deselect:
             box_id = 'Repeater1$ctl0{0}$CbkMealtimes'.format(meal_order)
 
@@ -336,8 +365,8 @@ def main():
     # 记录login_cas返回值。若登录失败，可以复用上次登录返回的页面中的lt
     auth_return = None
     while True:
-        student_id = int(input('\n输完按Enter\n请输入学号：'))
-        if len(str(student_id)) == 7:
+        student_id = input('\n输完按Enter\n请输入学号：')
+        if len(student_id) == 7:
             pass
         else:
             print('请输入长度为7位数字的学号')
@@ -373,18 +402,14 @@ def main():
         # 检查日期
         print('要是想得到别的月份的菜单，输一个那个月的日期')
         date = input('格式为：年-月-日，如：2015-9-30\n请输入日期：')
-        date_splited = date.split('-')
-        # 统一宽度。这样就能够处理2015-9-3这种“格式错误”的日期了
-        date = '{0}-{1}-{2}'.format(
-                date_splited[0].zfill(4),
-                date_splited[1].zfill(2),
-                date_splited[2].zfill(2)
-        )
-        month = date_splited[0] + '-' + date_splited[1].lstrip('0')
         # 首先，确认它是个正确的日期
-        date_object = datetime.datetime.strptime(date, '%Y-%m-%d')
+        date_object = datetime.datetime.strptime(date, '%Y-%m-%d').date()
+        # 统一宽度。这样就能够处理2015-9-3这种“格式错误”的日期了
+        date = date_object.strftime('%Y-%m-%d')
+        year = date_object.year
+        month = date_object.strftime('%Y-%m').strip('0')
         # 其次，确认输入的年份在可选的年份中
-        if date_splited[0] in selectable_year:
+        if year in selectable_year:
             pass
         else:
             print('请输入在')
@@ -404,7 +429,7 @@ def main():
         else:  # 若输入的日期不存在，向服务器查询输入的月份
             print('正在获取对应月份的订餐日期列表')
             date_page, viewstate_calendar, eventvalidation_calendar = query_calendar(
-                    date_splited[0], date_splited[1],
+                    year, month,
                     viewstate_calendar, eventvalidation_calendar
             )
 
@@ -480,7 +505,6 @@ def main():
                         to_deselect.append(meal.id)
 
                     print('若您不需要改变订购份数，直接按Enter即可')
-                    required_course = []
                     for course in meal:
                         print('\n编号：{0} 菜名：{1} 单价：{2} 最大份数：{3} 已定份数：{4}'.format(
                                 course.id,
@@ -506,8 +530,6 @@ def main():
                                     print('请输入一个大于等于0且小于等于{0}的整数'.format(
                                             course.max))
                                     continue
-                        if course.type == '必订菜':
-                            required_course.append(course.id)
 
                     # 放入必选菜
                     # 我也不知道会不会有某一餐有多道必选菜，所以最好还是不要写死了
@@ -516,7 +538,7 @@ def main():
                     else:
                         course_num = 1
 
-                    for course in required_course:
+                    for course in meal.required_course:
                         course_amount[meal.id, course] = course_num
 
         if menu.mutable:
