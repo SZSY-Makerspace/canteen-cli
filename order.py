@@ -241,6 +241,9 @@ class Menu(list):
         for meal_seq in range(meal_count):
             # 尽管没遇到过菜数不是9的情况，但还是别把它写死吧
             course_count = get_course_count(page, meal_seq)
+            # 若菜单不可修改，总价那一行不会有那个id标签
+            if not self.mutable:
+                course_count -= 1
             xpath = '//table[@id="Repeater1_GvReport_{0}"]/tr/td//text()'.format(meal_seq)
             menu_item = tree.xpath(xpath)
             self.append(Meal(meal_seq, menu_item, course_count))
