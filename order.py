@@ -7,7 +7,8 @@ import requests
 from lxml import html
 
 skeleton_headers = {
-    'Accept': 'Accept: image/gif, image/jpeg, image/pjpeg, application/x-ms-application, application/xaml+xml, application/x-ms-xbap, */*',
+    'Accept': 'image/gif, image/jpeg, image/pjpeg, application/x-ms-application, application/xaml+xml, \
+application/x-ms-xbap, */*',
     'Accept-Encoding': 'gzip, deflate',
     'Accept-Language': 'zh-Hans-CN, zh-Hans; q=0.5',
     'Connection': 'keep-alive',
@@ -26,7 +27,34 @@ logined_skeleton_form = {
 
 MEAL_NAME = ('早餐', '午餐', '晚餐')
 
-opener = requests.Session()
+session = requests.Session()
+
+
+class SessionExpired(Exception):
+    def __str__(self):
+        return "Your session has expired."
+
+
+def get(url, params=None, headers=skeleton_headers):
+    real_headers = skeleton_headers.copy()
+    real_headers.update(headers)
+    request = session.get(url, params=params, headers=real_headers)
+
+    if LOGIN_URL in request.url:
+        raise SessionExpired
+    return request
+
+
+def post(url, data, params=None, headers=skeleton_headers):
+    real_headers = skeleton_headers.copy()
+    real_headers.update(headers)
+    real_data = logined_skeleton_form.copy()
+    real_data.update(data)
+    request = session.post(url, real_data, params=params, headers=real_headers)
+
+    if LOGIN_URL in request.url:
+        raise SessionExpired
+    return request
 
 
 def login_cas(username, password, cas_param=None):
@@ -45,7 +73,7 @@ def login_cas(username, password, cas_param=None):
         # 据观察，只有在第一次访问，即Cookie中没有JSESSIONID时，页面中的地址才会带上JSESSIONID
         # 说真的，这步没啥必要。不过，尽量模拟得逼真点吧
         # 而lt是会变化的
-        login_page = opener.get(LOGIN_URL, headers=skeleton_headers)
+        login_page = session.get(LOGIN_URL, headers=skeleton_headers)
         jsessionid = re.search('jsessionid=(.*?)"', login_page.text).group(1)
         lt = re.search('name="lt" value="(.*?)"', login_page.text).group(1)
         login_post_url = LOGIN_URL + ';jsessionid=' + jsessionid
@@ -63,7 +91,7 @@ def login_cas(username, password, cas_param=None):
     }
     cas_login_headers = skeleton_headers.copy()
     cas_login_headers['Referer'] = LOGIN_URL
-    auth = opener.post(login_post_url, login_form, headers=cas_login_headers)
+    auth = session.post(login_post_url, login_form, headers=cas_login_headers)
     auth_status = '<SCRIPT LANGUAGE="JavaScript">' in auth.text
 
     if auth_status:
@@ -76,9 +104,8 @@ def login_cas(username, password, cas_param=None):
 
 def login_card_system():
     """登录“一卡通”系统，返回值为用户的姓名和卡中的余额"""
-    card_login_headers = skeleton_headers.copy()
-    card_login_headers['Referer'] = 'http://gzb.szsy.cn:4000/lcconsole/login!getSSOMessage.action'
-    card_login = opener.get(CARD_SYSTEM_LOGIN_URL, headers=card_login_headers)
+    card_login_headers = {'Referer': 'http://gzb.szsy.cn:4000/lcconsole/login!getSSOMessage.action'}
+    card_login = get(CARD_SYSTEM_LOGIN_URL, headers=card_login_headers)
     order_welcome_page = card_login.text  # 此处会302到欢迎页
     name = re.search(r'<span id="LblUserName">当前用户：(.*?)</span>', order_welcome_page).group(1)
     balance = re.search(r'<span id="LblBalance">帐户余额：(.*?)元</span>', order_welcome_page).group(1)
@@ -86,36 +113,17 @@ def login_card_system():
     return name, balance
 
 
-def get_viewstate(page):
+def get_web_forms_field(page):
     """
-    从页面中得到VIEWSTATE
+    从页面中得到ASP.NET Web Forms的View State, View State Generator, Event Validation
+    [viewstate, viewstategenertor, eventvalidation]
     :type page: str
-    :rtype: str
+    :rtype: list
     """
-    viewstate = re.search(r'id="__VIEWSTATE" value="(.*?)"', page).group(1)
-    return viewstate
-
-
-def get_eventvalidation(page):
-    """
-    从页面中得到EVENTVALIDATION
-    :type page: str
-    :rtype: str
-    """
-    eventvalidation = re.search(r'id="__EVENTVALIDATION" value="(.*?)"', page).group(1)
-    return eventvalidation
-
-
-def get_default_calendar():
-    """第一次访问选择日期的页面，返回选择日期的页面，VIEWSTATE，EVENTVALIDATION"""
-    get_default_calendar_headers = skeleton_headers.copy()
-    get_default_calendar_headers['Referer'] = 'http://gzb.szsy.cn/card/Default.aspx'
-    calendar = opener.get(CALENDAR_URL, headers=get_default_calendar_headers)
-    calendar_page = calendar.text
-    viewstate = get_viewstate(calendar_page)
-    eventvalidation = get_eventvalidation(calendar_page)
-
-    return calendar_page, viewstate, eventvalidation
+    vs = re.search(r'id="__VIEWSTATE" value="(.*?)"', page).group(1)
+    vsg = re.search(r'id="__VIEWSTATEGENERATOR" value="(.*?)"', page).group(1)
+    ev = re.search(r'id="__EVENTVALIDATION" value="(.*?)"', page).group(1)
+    return [vs, vsg, ev]
 
 
 def parse_date_list(page):
@@ -124,69 +132,87 @@ def parse_date_list(page):
     :type page: str
     :rtype: list
     """
-    date_list = re.findall(r'href="RestaurantUserMenu\.aspx\?Date=(\d{4}-\d{1,2}-\d{1,2})"', page)
+    date_list = re.findall(r'\?Date=(\d{4}-\d{2}-\d{2})', page)
 
     return date_list
 
 
-def parse_default_calendar(page):
-    """
-    解析第一次得到的选择日期的页面，返回日期列表，已查询的月份，可查询的年份
-    :type page: str
-    """
-    selected_year = re.search(r'<option selected="selected" value="\d{4}">(\d{4})<\/option>', page).group(1)
-    selected_month = re.search(r'<option selected="selected" value="\d{1,2}">(\d{1,2})月<\/option>', page).group(1)
-    selectable_year = re.findall(r'value="(\d{4})"', page)
-    date_list = parse_date_list(page)
-    queried_month = [selected_year + '-' + selected_month]
+class Calendar(dict):
+    def __init__(self, selected_year, form_param, selectable_year, init_dict):
+        super().__init__()
+        # 0-成功, 1-年份不可选
+        self.status = 0
+        self.selected_year = selected_year
+        self.form_param = form_param
 
-    return date_list, queried_month, selectable_year
+        self.selectable_year = selectable_year
 
+        self.update(init_dict)
 
-def query_calendar(year, month, viewstate, eventvalidation):
-    """查询对应月份的菜单，返回值为选择日期的页面, VIEWSTATE, EVENTVALIDATION
-    :type year: int
-    :type month: int
-    :type viewstate: str
-    :type eventvalidation: str
-    :param year: 菜单的年份
-    :param month: 菜单的月份
-    """
-    query_calendar_form = logined_skeleton_form.copy()
-    query_calendar_form.update({
-        '__EVENTTARGET': 'DrplstMonth1$DrplstControl',
-        '__VIEWSTATE': viewstate,
-        '__EVENTVALIDATION': eventvalidation,
-        'DrplstYear1$DrplstControl': year,
-        'DrplstMonth1$DrplstControl': month
-    })
-    query_calendar_headers = skeleton_headers.copy()
-    query_calendar_headers['Referer'] = CALENDAR_URL
-    post_calendar = opener.post(CALENDAR_URL, query_calendar_form, headers=query_calendar_headers)
-    calendar_page = post_calendar.text
-    viewstate = get_viewstate(calendar_page)
-    eventvalidation = get_eventvalidation(calendar_page)
+    @classmethod
+    def calendar_init(cls):
+        """第一次访问选择日期的页面，返回选择日期的页面，VIEWSTATE，EVENTVALIDATION"""
+        get_default_calendar_headers = {'Referer': 'http://gzb.szsy.cn/card/Default.aspx'}
+        calendar = get(CALENDAR_URL, headers=get_default_calendar_headers)
+        page = calendar.text
+        form_param = get_web_forms_field(page)
+        selectable_year = [int(year) for year in re.findall(r'value="(\d{4})"', page)]
+        selected_year = re.search(r'<option selected="selected" value="\d{4}">(\d{4})</option>', page).group(1)
+        selected_month = re.search(r'<option selected="selected" value="\d{1,2}">(\d{1,2})月</option>', page).group(
+            1).zfill(2)
+        date_string = selected_year + '-' + selected_month
+        init_dict = {date_string: parse_date_list(page)}
+        return cls(int(selected_year), form_param, selectable_year, init_dict)
 
-    return calendar_page, viewstate, eventvalidation
+    def test(self, date):
+        """
+        :type date: datetime.date
+        """
+        if date.year in self.selectable_year:
+            query_string = date.strftime('%Y-%m')
+            date_string = date.strftime('%Y-%m-%d')
+            if query_string in self:
+                pass
+            else:
+                self[query_string] = self.query_calendar(date.year, date.month)
+            return date_string in self[query_string]
+        else:
+            return False
 
+    def query_calendar(self, year, month):
+        """
+        查询对应月份的菜单
+        :type year: int
+        :type month: int
+        :param year: 菜单的年份
+        :param month: 菜单的月份
+        """
+        query_calendar_form = {
+            '__EVENTTARGET': 'DrplstMonth1$DrplstControl',
+            '__VIEWSTATE': self.form_param[0],
+            '__VIEWSTATEGENERATOR': self.form_param[1],
+            '__EVENTVALIDATION': self.form_param[2],
+            'DrplstYear1$DrplstControl': year,
+            'DrplstMonth1$DrplstControl': month
+        }
+        query_calendar_headers = {'Referer': CALENDAR_URL}
+        post_calendar = post(CALENDAR_URL, query_calendar_form, headers=query_calendar_headers)
+        page = post_calendar.text
+        self.form_param = get_web_forms_field(page)
 
-def get_menu(date):
-    """
-    获得给定日期的菜单，返回菜单的页面，VIEWSTATE和EVENTVALIDATION
-    :type date: string
-    """
-    get_menu_headers = skeleton_headers.copy()
-    get_menu_headers['Referer'] = CALENDAR_URL
-    menu = opener.get(MENU_URL, params={'Date': date}, headers=get_menu_headers)
+        if not year == self.selected_year:
+            # 切换年份时，需要像处理不订餐那么搞
+            query_calendar_form.update({
+                '__VIEWSTATE': self.form_param[0],
+                '__VIEWSTATEGENERATOR': self.form_param[1],
+                '__EVENTVALIDATION': self.form_param[2]
+            })
+            post_calendar = post(CALENDAR_URL, query_calendar_form, headers=query_calendar_headers)
+            page = post_calendar.text
+            self.form_param = get_web_forms_field(page)
+            self.selected_year = year
 
-    # 我也是被逼的……如果不这么干，lxml提取出的列表里会有那串空白
-    # 且看上去remove_blank_text不是这么用的
-    menu_tidied = re.sub(r'\r\n {24}(?: {4})?', '', menu.text)
-    menu_tidied = menu_tidied.replace('&nbsp;', ' ')  # 避免在Windows下出现编码问题，GBK中没有\xa0
-    viewstate = get_viewstate(menu_tidied)
-    eventvalidation = get_eventvalidation(menu_tidied)
-
-    return menu_tidied, viewstate, eventvalidation
+        return parse_date_list(page)
 
 
 def get_course_count(page, menu_sequence):
@@ -212,6 +238,7 @@ class Course(object):
 
 class Meal(list):
     def __init__(self, seq, menu_list, course_count):
+        super().__init__()
         self.required_course = []
         self.id = seq
 
@@ -226,7 +253,10 @@ class Meal(list):
 
 
 class Menu(list):
-    def __init__(self, page):
+    def __init__(self, date):
+        super().__init__()
+        page = self.get_menu(date)
+        self.form_param = get_web_forms_field(page)
         # 只有装着菜单的table是带"id"属性的
         meal_count = len(re.findall(r'id="Repeater1_GvReport_(\d)"', page))
         self.do_not_order = [int(x) for x in
@@ -248,21 +278,34 @@ class Menu(list):
             menu_item = tree.xpath(xpath)
             self.append(Meal(meal_seq, menu_item, course_count))
 
+    @staticmethod
+    def get_menu(date):
+        """
+        获得给定日期的菜单，返回菜单的页面
+        :type date: str
+        :rtype: str
+        """
+        get_menu_headers = {'Referer': CALENDAR_URL}
+        menu = get(MENU_URL, params={'Date': date}, headers=get_menu_headers)
 
-def get_course_amount(menu):
-    """
-    参数为菜单。返回值为菜单中已订菜的数量的字典
-    :type menu: Menu
-    :param menu: 菜单
-    :rtype: dict
-    """
-    course_amount = {}
-    for meal in menu:
-        for course in meal:
-            # (餐次, 编号) = 数量
-            course_amount[meal.id, course.id] = course.current
+        # 我也是被逼的……如果不这么干，lxml提取出的列表里会有那串空白
+        # 且看上去remove_blank_text不是这么用的
+        page = re.sub(r'\r\n {24}(?: {4})?', '', menu.text)
+        page = page.replace('&nbsp;', ' ')  # 避免在Windows下出现编码问题，GBK中没有\xa0
+        return page
 
-    return course_amount
+    def get_course_amount(self):
+        """
+        参数为菜单。返回值为菜单中已订菜的数量的字典
+        :rtype: dict
+        """
+        course_amount = {}
+        for meal in self:
+            for course in meal:
+                # (餐次, 编号) = 数量
+                course_amount[meal.id, course.id] = course.current
+
+        return course_amount
 
 
 def gen_menu_param(course_amount):
@@ -275,13 +318,13 @@ def gen_menu_param(course_amount):
     for k, v in course_amount.items():
         # {0}用于和自己拼在一起。{1[0]}为key中的第一个数，即meal_order，{1[1]}即course
         param_string = '{0}Repeater1_GvReport_{1[0]}_TxtNum_{1[1]}@{2}|'.format(
-                param_string, k, v
+            param_string, k, v
         )
 
     return param_string
 
 
-def submit_menu(date, course_amount, do_not_order_list, to_select, to_deselect, viewstate, eventvalidation):
+def submit_menu(date, course_amount, do_not_order_list, to_select, to_deselect, form_param):
     """
     返回是否成功的Bool
     :type date: str
@@ -289,26 +332,23 @@ def submit_menu(date, course_amount, do_not_order_list, to_select, to_deselect, 
     :type do_not_order_list: list
     :type to_select: list
     :type to_deselect: list
-    :type viewstate: str
-    :type eventvalidation: str
+    :type form_param: list
     :param date: 提交菜单的日期
     :param course_amount: 菜的数量
     :param do_not_order_list: 原页面已勾选“不订餐”的餐次
     :param to_select: 要“不订餐”的餐次
     :param to_deselect: 要取消“不订餐”的餐次
-    :param viewstate: 菜单页的VIEWSTATE
-    :param eventvalidation: 菜单页的EVENTVALIDATION
+    :param form_param: 菜单页与ASP.NET Web Forms相关的字段
     :rtype: bool
     """
-    submit_menu_form = logined_skeleton_form.copy()
-    submit_menu_form.update({
-        '__VIEWSTATE': viewstate,
+    submit_menu_form = {
+        '__VIEWSTATE': form_param[0],
+        '__VIEWSTATEGENERATOR': form_param[1],
         '__VIEWSTATEENCRYPTED': '',
         'DrplstRestaurantBasis1$DrplstControl': '4d05282b-b96f-4a3f-ba54-fc218266a524',
-        '__EVENTVALIDATION': eventvalidation
-    })
-    submit_menu_headers = skeleton_headers.copy()
-    submit_menu_headers['Referer'] = MENU_URL + '?Date=' + date
+        '__EVENTVALIDATION': form_param[2]
+    }
+    submit_menu_headers = {'Referer': MENU_URL + '?Date=' + date}
 
     # 把原页面已勾选“不订餐”的放入表单
     for meal_order in do_not_order_list:
@@ -327,20 +367,21 @@ def submit_menu(date, course_amount, do_not_order_list, to_select, to_deselect, 
                 del submit_menu_form[box_id]
 
             submit_menu_form['__EVENTTARGET'] = box_id
-            submit_do_not_order = opener.post(
-                    MENU_URL,
-                    submit_menu_form,
-                    params={'Date': date}
+            submit_do_not_order = post(
+                MENU_URL,
+                submit_menu_form,
+                params={'Date': date},
+                headers=submit_menu_headers
             )
             submit_return_page = submit_do_not_order.text
 
             # 提交后会返回新页面，又要改这些
             # Evil ASP.NET!
-            viewstate = get_viewstate(submit_return_page)
-            eventvalidation = get_eventvalidation(submit_return_page)
+            form_param = get_web_forms_field(submit_return_page)
             submit_menu_form.update({
-                '__VIEWSTATE': viewstate,
-                '__EVENTVALIDATION': eventvalidation
+                '__VIEWSTATE': form_param[0],
+                '__VIEWSTATEGENERATOR': form_param[1],
+                '__EVENTVALIDATION': form_param[2]
             })
 
     # 提交菜单
@@ -351,11 +392,11 @@ def submit_menu(date, course_amount, do_not_order_list, to_select, to_deselect, 
         '__CALLBACKPARAM': menu_param
     })
 
-    post_menu = opener.post(
-            MENU_URL,
-            submit_menu_form,
-            params={'Date': date},
-            headers=submit_menu_headers
+    post_menu = post(
+        MENU_URL,
+        submit_menu_form,
+        params={'Date': date},
+        headers=submit_menu_headers
     )
     status = '订餐成功！' in post_menu.text
 
@@ -392,12 +433,12 @@ def main():
     print("您的卡上还有", card_balance, "元")
 
     print('正在初始化日期列表')
-    calendar_page, viewstate_calendar, eventvalidation_calendar = get_default_calendar()
-    date_list_full, queried_month, selectable_year = parse_default_calendar(calendar_page)
+    calendar = Calendar.calendar_init()
     print('当前月份内，您可以选择以下日期')
-    for date in date_list_full:
-        date_object = datetime.datetime.strptime(date, '%Y-%m-%d')
-        print('{0} 星期{1}'.format(date, date_object.isoweekday()))
+    for month in calendar.values():
+        for date in month:
+            date_object = datetime.datetime.strptime(date, '%Y-%m-%d')
+            print('{0} 星期{1}'.format(date, date_object.isoweekday()))
     # 说的是“72小时”，实际上是把那一整天排除了，故+1
     print("理论上说，现在能够订到", datetime.timedelta(3 + 1) + datetime.date.today(), "及以后的餐")
 
@@ -408,56 +449,31 @@ def main():
         # 首先，确认它是个正确的日期
         date_object = datetime.datetime.strptime(date, '%Y-%m-%d').date()
         # 统一宽度。这样就能够处理2015-9-3这种“格式错误”的日期了
-        date = date_object.strftime('%Y-%m-%d')
-        year = date_object.year
-        month = date_object.strftime('%Y-%m').strip('0')
-        # 其次，确认输入的年份在可选的年份中
-        if year in selectable_year:
+        status = calendar.test(date_object)
+        if status:
             pass
         else:
-            print('请输入在')
-            for year in selectable_year:
-                print(year)
-            print('中的年份')
-            continue
-
-        if date in date_list_full:
-            pass
-        elif month in queried_month:
-            print('请输入')
-            for item in date_list_full:
-                print(item)
-            print('中的日期')
-            continue
-        else:  # 若输入的日期不存在，向服务器查询输入的月份
-            print('正在获取对应月份的订餐日期列表')
-            date_page, viewstate_calendar, eventvalidation_calendar = query_calendar(
-                    year, month,
-                    viewstate_calendar, eventvalidation_calendar
-            )
-
-            date_list_current = parse_date_list(date_page)
-            date_list_full.extend(date_list_current)
-            queried_month.append(month)
-
-            if len(date_list_current) == 0:
-                print('月份内没有可以点餐的日期')
+            if date_object.year not in calendar.selectable_year:
+                print('请输入在')
+                for year in calendar.selectable_year:
+                    print(year)
+                print('中的年份')
                 continue
-            elif date in date_list_current:
-                pass
+            elif len(calendar[date_object.strftime('%Y-%m')]) == 0:
+                print('当前月份内无可订餐的日期')
             else:
                 print('请输入')
-                for date in date_list_full:
-                    date_object = datetime.datetime.strptime(date, '%Y-%m-%d')
-                    print('{0} 星期{1}'.format(date, date_object.isoweekday()))
+                for month in calendar.values():
+                    for date in month:
+                        date_object = datetime.datetime.strptime(date, '%Y-%m-%d')
+                        print('{0} 星期{1}'.format(date, date_object.isoweekday()))
                 print('中的日期')
-                continue
 
         # 拉菜单
         print('正在获取菜单')
-        menu_page, viewstate_menu, eventvalidation_menu = get_menu(date)
-        menu = Menu(menu_page)
-        course_amount = get_course_amount(menu)
+        date = date_object.strftime('%Y-%m-%d')
+        menu = Menu(date)
+        course_amount = menu.get_course_amount()
 
         # 准备记录“不订餐”状态变化的餐次的列表
         to_select = []
@@ -510,11 +526,11 @@ def main():
                     print('若您不需要改变订购份数，直接按Enter即可')
                     for course in meal:
                         print('\n编号：{0} 菜名：{1} 单价：{2} 最大份数：{3} 已定份数：{4}'.format(
-                                course.id,
-                                course.name,
-                                course.price,
-                                course.max,
-                                course.current
+                            course.num,
+                            course.name,
+                            course.price,
+                            course.max,
+                            course.current
                         ))
                         while not course.type == '必订菜':
                             course_num = input('请输入您要点的份数：')
@@ -531,7 +547,7 @@ def main():
                                     break
                                 else:
                                     print('请输入一个大于等于0且小于等于{0}的整数'.format(
-                                            course.max))
+                                        course.max))
                                     continue
 
                     # 放入必选菜
@@ -547,9 +563,9 @@ def main():
         if menu.mutable:
             print('正在提交菜单')
             post_status = submit_menu(
-                    date, course_amount,
-                    menu.do_not_order, to_select, to_deselect,
-                    viewstate_menu, eventvalidation_menu)
+                date, course_amount,
+                menu.do_not_order, to_select, to_deselect,
+                menu.form_param)
 
             if post_status:
                 print('\n订餐成功')
