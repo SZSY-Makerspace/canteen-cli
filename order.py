@@ -324,23 +324,21 @@ def gen_menu_param(course_amount):
     return param_string
 
 
-def submit_menu(date, course_amount, do_not_order_list, to_select, to_deselect, form_param):
+def submit_menu(date, course_amount, do_not_order, form_param):
     """
     返回是否成功的Bool
     :type date: str
     :type course_amount: dict
-    :type do_not_order_list: list
-    :type to_select: list
-    :type to_deselect: list
+    :type do_not_order: list
     :type form_param: list
     :param date: 提交菜单的日期
     :param course_amount: 菜的数量
-    :param do_not_order_list: 原页面已勾选“不订餐”的餐次
-    :param to_select: 要“不订餐”的餐次
-    :param to_deselect: 要取消“不订餐”的餐次
+    :param do_not_order: [原页面已勾选“不订餐”的餐次, 要“不订餐”的餐次, 要取消“不订餐”的餐次]
     :param form_param: 菜单页与ASP.NET Web Forms相关的字段
     :rtype: bool
     """
+    # unpack
+    do_not_order_list, to_select, to_deselect = do_not_order
     submit_menu_form = {
         '__VIEWSTATE': form_param[0],
         '__VIEWSTATEGENERATOR': form_param[1],
@@ -562,10 +560,10 @@ def main():
 
         if menu.mutable:
             print('正在提交菜单')
+            do_not_order_list = [menu.do_not_order, to_select, to_deselect]
             post_status = submit_menu(
                 date, course_amount,
-                menu.do_not_order, to_select, to_deselect,
-                menu.form_param)
+                do_not_order_list, menu.form_param)
 
             if post_status:
                 print('\n订餐成功')
