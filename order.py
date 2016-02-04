@@ -27,34 +27,56 @@ logined_skeleton_form = {
 
 MEAL_NAME = ('早餐', '午餐', '晚餐')
 
-session = requests.Session()
-
 
 class SessionExpired(Exception):
     def __str__(self):
         return "Your session has expired."
 
 
-def get(url, params=None, headers=skeleton_headers):
-    real_headers = skeleton_headers.copy()
-    real_headers.update(headers)
-    request = session.get(url, params=params, headers=real_headers)
+class Session(requests.Session):
+    def s_get(self, url, params=None, referrer=None, logged_in=True):
+        """
+        自制的session.get
+        :type url: str
+        :type params: dict
+        :type referrer: str
+        :type logged_in: bool
+        :rtype: requests.Response
+        """
+        self.headers = skeleton_headers.copy()
+        if referrer is not None:
+            self.headers['Referer'] = referrer
+        request = super().get(url, params=params)
 
-    if LOGIN_URL in request.url:
-        raise SessionExpired
-    return request
+        if LOGIN_URL in request.url and logged_in:
+            raise SessionExpired
+        return request
+
+    def s_post(self, url, data, params=None, referrer=None, logged_in=True):
+        """
+        :type url: str
+        :type data: dict
+        :type params: dict
+        :type referrer: str
+        :type logged_in: bool
+        :rtype: requests.Response
+        """
+        self.headers = skeleton_headers.copy()
+        if referrer is not None:
+            self.headers['Referer'] = referrer
+        if logged_in:
+            real_data = logined_skeleton_form.copy()
+            real_data.update(data)
+        else:
+            real_data = data
+        request = super().post(url, real_data, params=params)
+
+        if LOGIN_URL in request.url and logged_in:
+            raise SessionExpired
+        return request
 
 
-def post(url, data, params=None, headers=skeleton_headers):
-    real_headers = skeleton_headers.copy()
-    real_headers.update(headers)
-    real_data = logined_skeleton_form.copy()
-    real_data.update(data)
-    request = session.post(url, real_data, params=params, headers=real_headers)
-
-    if LOGIN_URL in request.url:
-        raise SessionExpired
-    return request
+session = Session()
 
 
 def login_cas(username, password, cas_param=None):
@@ -73,7 +95,7 @@ def login_cas(username, password, cas_param=None):
         # 据观察，只有在第一次访问，即Cookie中没有JSESSIONID时，页面中的地址才会带上JSESSIONID
         # 说真的，这步没啥必要。不过，尽量模拟得逼真点吧
         # 而lt是会变化的
-        login_page = session.get(LOGIN_URL, headers=skeleton_headers)
+        login_page = session.s_get(LOGIN_URL, logged_in=False)
         jsessionid = re.search('jsessionid=(.*?)"', login_page.text).group(1)
         lt = re.search('name="lt" value="(.*?)"', login_page.text).group(1)
         login_post_url = LOGIN_URL + ';jsessionid=' + jsessionid
@@ -89,9 +111,7 @@ def login_cas(username, password, cas_param=None):
         '_eventId': 'submit',
         'submit': '登录'
     }
-    cas_login_headers = skeleton_headers.copy()
-    cas_login_headers['Referer'] = LOGIN_URL
-    auth = session.post(login_post_url, login_form, headers=cas_login_headers)
+    auth = session.s_post(login_post_url, login_form, referrer=LOGIN_URL, logged_in=False)
     auth_status = '<SCRIPT LANGUAGE="JavaScript">' in auth.text
 
     if auth_status:
@@ -104,8 +124,8 @@ def login_cas(username, password, cas_param=None):
 
 def login_card_system():
     """登录“一卡通”系统，返回值为用户的姓名和卡中的余额"""
-    card_login_headers = {'Referer': 'http://gzb.szsy.cn:4000/lcconsole/login!getSSOMessage.action'}
-    card_login = get(CARD_SYSTEM_LOGIN_URL, headers=card_login_headers)
+    card_login = session.s_get(CARD_SYSTEM_LOGIN_URL,
+                               referrer='http://gzb.szsy.cn:4000/lcconsole/login!getSSOMessage.action')
     order_welcome_page = card_login.text  # 此处会302到欢迎页
     name = re.search(r'<span id="LblUserName">当前用户：(.*?)</span>', order_welcome_page).group(1)
     balance = re.search(r'<span id="LblBalance">帐户余额：(.*?)元</span>', order_welcome_page).group(1)
@@ -118,7 +138,7 @@ def get_web_forms_field(page):
     从页面中得到ASP.NET Web Forms的View State, View State Generator, Event Validation
     [viewstate, viewstategenertor, eventvalidation]
     :type page: str
-    :rtype: list
+    :rtype: list[str]
     """
     vs = re.search(r'id="__VIEWSTATE" value="(.*?)"', page).group(1)
     vsg = re.search(r'id="__VIEWSTATEGENERATOR" value="(.*?)"', page).group(1)
@@ -130,7 +150,7 @@ def parse_date_list(page):
     """
     用来解析选择日期的页面，得到可查询的日期的列表
     :type page: str
-    :rtype: list
+    :rtype: list[str]
     """
     date_list = re.findall(r'\?Date=(\d{4}-\d{2}-\d{2})', page)
 
@@ -140,8 +160,6 @@ def parse_date_list(page):
 class Calendar(dict):
     def __init__(self, selected_year, form_param, selectable_year, init_dict):
         super().__init__()
-        # 0-成功, 1-年份不可选
-        self.status = 0
         self.selected_year = selected_year
         self.form_param = form_param
 
@@ -152,11 +170,11 @@ class Calendar(dict):
     @classmethod
     def calendar_init(cls):
         """第一次访问选择日期的页面，返回选择日期的页面，VIEWSTATE，EVENTVALIDATION"""
-        get_default_calendar_headers = {'Referer': 'http://gzb.szsy.cn/card/Default.aspx'}
-        calendar = get(CALENDAR_URL, headers=get_default_calendar_headers)
+        calendar = session.s_get(CALENDAR_URL, referrer='http://gzb.szsy.cn/card/Default.aspx')
         page = calendar.text
         form_param = get_web_forms_field(page)
         selectable_year = [int(year) for year in re.findall(r'value="(\d{4})"', page)]
+        selectable_year.sort()
         selected_year = re.search(r'<option selected="selected" value="\d{4}">(\d{4})</option>', page).group(1)
         selected_month = re.search(r'<option selected="selected" value="\d{1,2}">(\d{1,2})月</option>', page).group(
             1).zfill(2)
@@ -195,8 +213,7 @@ class Calendar(dict):
             'DrplstYear1$DrplstControl': year,
             'DrplstMonth1$DrplstControl': month
         }
-        query_calendar_headers = {'Referer': CALENDAR_URL}
-        post_calendar = post(CALENDAR_URL, query_calendar_form, headers=query_calendar_headers)
+        post_calendar = session.s_post(CALENDAR_URL, query_calendar_form, referrer=CALENDAR_URL)
         page = post_calendar.text
         self.form_param = get_web_forms_field(page)
 
@@ -207,12 +224,27 @@ class Calendar(dict):
                 '__VIEWSTATEGENERATOR': self.form_param[1],
                 '__EVENTVALIDATION': self.form_param[2]
             })
-            post_calendar = post(CALENDAR_URL, query_calendar_form, headers=query_calendar_headers)
+            post_calendar = session.s_post(CALENDAR_URL, query_calendar_form, referrer=CALENDAR_URL)
             page = post_calendar.text
             self.form_param = get_web_forms_field(page)
             self.selected_year = year
 
         return parse_date_list(page)
+
+
+def get_menu(date):
+    """
+    获得给定日期的菜单，返回菜单的页面
+    :type date: str
+    :rtype: str
+    """
+    menu = session.s_get(MENU_URL, params={'Date': date}, referrer=CALENDAR_URL)
+
+    # 我也是被逼的……如果不这么干，lxml提取出的列表里会有那串空白
+    # 且看上去remove_blank_text不是这么用的
+    page = re.sub(r'\r\n {24}(?: {4})?', '', menu.text)
+    page = page.replace('&nbsp;', ' ')  # 避免在Windows下出现编码问题，GBK中没有\xa0
+    return page
 
 
 def get_course_count(page, menu_sequence):
@@ -255,7 +287,7 @@ class Meal(list):
 class Menu(list):
     def __init__(self, date):
         super().__init__()
-        page = self.get_menu(date)
+        page = get_menu(date)
         self.form_param = get_web_forms_field(page)
         # 只有装着菜单的table是带"id"属性的
         meal_count = len(re.findall(r'id="Repeater1_GvReport_(\d)"', page))
@@ -277,22 +309,6 @@ class Menu(list):
             xpath = '//table[@id="Repeater1_GvReport_{0}"]/tr/td//text()'.format(meal_seq)
             menu_item = tree.xpath(xpath)
             self.append(Meal(meal_seq, menu_item, course_count))
-
-    @staticmethod
-    def get_menu(date):
-        """
-        获得给定日期的菜单，返回菜单的页面
-        :type date: str
-        :rtype: str
-        """
-        get_menu_headers = {'Referer': CALENDAR_URL}
-        menu = get(MENU_URL, params={'Date': date}, headers=get_menu_headers)
-
-        # 我也是被逼的……如果不这么干，lxml提取出的列表里会有那串空白
-        # 且看上去remove_blank_text不是这么用的
-        page = re.sub(r'\r\n {24}(?: {4})?', '', menu.text)
-        page = page.replace('&nbsp;', ' ')  # 避免在Windows下出现编码问题，GBK中没有\xa0
-        return page
 
     def get_course_amount(self):
         """
@@ -346,7 +362,6 @@ def submit_menu(date, course_amount, do_not_order, form_param):
         'DrplstRestaurantBasis1$DrplstControl': '4d05282b-b96f-4a3f-ba54-fc218266a524',
         '__EVENTVALIDATION': form_param[2]
     }
-    submit_menu_headers = {'Referer': MENU_URL + '?Date=' + date}
 
     # 把原页面已勾选“不订餐”的放入表单
     for meal_order in do_not_order_list:
@@ -365,11 +380,11 @@ def submit_menu(date, course_amount, do_not_order, form_param):
                 del submit_menu_form[box_id]
 
             submit_menu_form['__EVENTTARGET'] = box_id
-            submit_do_not_order = post(
+            submit_do_not_order = session.s_post(
                 MENU_URL,
                 submit_menu_form,
                 params={'Date': date},
-                headers=submit_menu_headers
+                referrer=MENU_URL + '?Date=' + date
             )
             submit_return_page = submit_do_not_order.text
 
@@ -390,11 +405,11 @@ def submit_menu(date, course_amount, do_not_order, form_param):
         '__CALLBACKPARAM': menu_param
     })
 
-    post_menu = post(
+    post_menu = session.s_post(
         MENU_URL,
         submit_menu_form,
         params={'Date': date},
-        headers=submit_menu_headers
+        referrer=MENU_URL + '?Date=' + date
     )
     status = '订餐成功！' in post_menu.text
 
@@ -459,6 +474,7 @@ def main():
                 continue
             elif len(calendar[date_object.strftime('%Y-%m')]) == 0:
                 print('当前月份内无可订餐的日期')
+                continue
             else:
                 print('请输入')
                 for month in calendar.values():
@@ -466,6 +482,7 @@ def main():
                         date_object = datetime.datetime.strptime(date, '%Y-%m-%d')
                         print('{0} 星期{1}'.format(date, date_object.isoweekday()))
                 print('中的日期')
+                continue
 
         # 拉菜单
         print('正在获取菜单')
