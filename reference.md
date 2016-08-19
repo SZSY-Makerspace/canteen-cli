@@ -1,4 +1,5 @@
 Menu on 2015-09-30 (Immutable):
+```
 ['0', '套餐', '早餐套餐', '套餐', ' ', '4.00', '1', '0', ' ',
  '1', '牛奶', '学生奶', ' ', ' ', '2.04', '3', '0', ' ',
  '2', '蛋类', '鲜鸡蛋', ' ', ' ', '1.20', '3', '0', ' ',
@@ -19,8 +20,10 @@ Menu on 2015-09-30 (Immutable):
  '7', '净荤菜', '酱猪手', ' ', ' ', '8.20', '3', '0', ' ',
  '9', '必订菜', '午餐必订菜(米饭汤)', ' ', '必选', '1.50', '1', '1', '已定',
  ' ', ' ', ' ', ' ', '合计:', '7.30', '0', '0', ' ']
+```
 
 Menu on 2015-10-08 (Mutable):
+```
 ['0', '套餐', '早餐套餐', '套餐', ' ', '4.00', '1', '0', ' ',
  '1', '牛奶', '学生奶', ' ', ' ', '2.04', '3', '0', ' ',
  '2', '蛋类', '鲜鸡蛋', ' ', ' ', '1.20', '3', '0', ' ',
@@ -51,8 +54,10 @@ Menu on 2015-10-08 (Mutable):
  '7', '净荤菜', '香酥鸡翅', ' ', ' ', '5.50', '3', '0', ' ',
  '9', '必订菜', '午晚餐必订菜（米饭汤）', ' ', '必选', '1.50', '1', '1', '已定',
  ' ', ' ', ' ', '合计:', '4.50', ' ']
+```
 
 Special lunch menu on 2015-11-04:
+```
 ['1', '必订菜', '午餐必订菜(米饭汤)', ' ', '必选', '1.50', '1', '1', '已定',
  '2', '套餐', '午餐套餐', '套餐', ' ', '10.00', '1', '0', ' ',
  '3', '水果', '苹果', ' ', ' ', '1.10', '3', '0', ' ',
@@ -63,11 +68,15 @@ Special lunch menu on 2015-11-04:
  '8', '荤菜', '三鲜豆腐', ' ', ' ', '3.10', '3', '1', '已定',
  '9', '净荤菜', '无锡排骨', ' ', ' ', '9.80', '3', '0', ' ',
  ' ', ' ', ' ', '合计:', '9.20', ' ']
+```
 
 An example of __CALLBACKPARAM:
+```
 Repeater1_GvReport_0_TxtNum_0@0|Repeater1_GvReport_0_TxtNum_1@0|Repeater1_GvReport_0_TxtNum_2@0|Repeater1_GvReport_0_TxtNum_3@1|Repeater1_GvReport_0_TxtNum_4@0|Repeater1_GvReport_0_TxtNum_5@0|Repeater1_GvReport_0_TxtNum_6@0|Repeater1_GvReport_0_TxtNum_7@1|Repeater1_GvReport_0_TxtNum_8@1|Repeater1_GvReport_1_TxtNum_0@0|Repeater1_GvReport_1_TxtNum_1@0|Repeater1_GvReport_1_TxtNum_2@1|Repeater1_GvReport_1_TxtNum_3@0|Repeater1_GvReport_1_TxtNum_4@0|Repeater1_GvReport_1_TxtNum_5@0|Repeater1_GvReport_1_TxtNum_6@1|Repeater1_GvReport_1_TxtNum_7@0|Repeater1_GvReport_1_TxtNum_8@1|Repeater1_GvReport_2_TxtNum_0@0|Repeater1_GvReport_2_TxtNum_1@0|Repeater1_GvReport_2_TxtNum_2@0|Repeater1_GvReport_2_TxtNum_3@0|Repeater1_GvReport_2_TxtNum_4@0|Repeater1_GvReport_2_TxtNum_5@0|Repeater1_GvReport_2_TxtNum_6@0|Repeater1_GvReport_2_TxtNum_7@0|Repeater1_GvReport_2_TxtNum_8@0|
+```
 
-An example of the login success page:
+An example of the successful login page:
+```html
 <SCRIPT LANGUAGE="JavaScript">
 <!--
 	window.location.href="http://gzb.szsy.cn:4000/lcconsole/";
@@ -113,3 +122,104 @@ An example of the login success page:
         </div>
     </body>
 </html>
+
+
+```
+
+An example of the unsuccessful login page:
+```html
+
+
+
+
+
+<script src="js/jquery.min.js"></script>
+<script src="js/jQuery.md5.js"></script>
+
+
+<SCRIPT LANGUAGE="JavaScript">
+   function doSubmit(){
+	  //document.getElementById("password").value = $.md5(null);
+	  document.getElementById("password").value = $.md5(document.getElementById("password").value);
+	  //alert(document.getElementById("password").value);
+   }
+</SCRIPT>
+
+
+
+
+
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+	<head>
+	    <title>统一身份认证系统 - Power By LCSOFT</title>
+        
+           
+           
+                <link type="text/css" rel="stylesheet" href="css/cas.css" />
+                <script type="text/javascript" src="js/common_rosters.js"></script>
+           
+        
+	    <link rel="icon" href="/cas/favicon.ico" type="image/x-icon" />
+	</head>
+	<body onload="init();">
+
+			<form id="fm1" name="fm1" action="/cas/login" method="post" onsubmit="doSubmit();">
+				<table border="0" cellpadding="0" cellspacing="6" width="280px" height="100%">
+					<tr>
+						<td height="10px" colspan="2" align="center">
+							<table border="0" cellpadding="0" cellspacing="0" width="96%">
+								<tr><td align="left"><div id="status">您输入的用户名或密码错，请重试。如果仍然错误，请联系8083朱老师。</div>
+									</td></tr>
+							</table>
+						</td>
+					</tr>
+					
+
+					<tr>
+						<td height="40px" >
+                        用户名:
+						</td>
+						<td>
+						
+						
+						
+						
+						<input id="username" name="username" tabindex="1" style="width:140px" accesskey="n" type="text" value="" autocomplete="false"/>
+						
+						</td>
+					</tr>
+					<tr>
+						<td>
+                        密　码:
+						</td>
+						<td>
+						
+						<input id="password" name="password" tabindex="2" style="width:140px" accesskey="p" type="password" value="" autocomplete="off"/>
+						</td>
+					</tr>
+					<tr>
+						<td align="center" colspan="2">
+						<input type="hidden" name="lt" value="e1s2" />
+						<input type="hidden" name="_eventId" value="submit" />
+						<input class="btn-submit" name="submit" accesskey="l" value="登录" tabindex="4" type="submit" />
+                        			<input class="btn-reset" name="reset" accesskey="c" value="重置" tabindex="5" type="reset" />
+
+						</td>
+					</tr>
+
+				</table>
+            </form>
+
+
+
+
+
+
+
+
+```

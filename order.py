@@ -2,6 +2,7 @@
 import datetime
 import re
 from getpass import getpass
+from hashlib import md5
 
 import requests
 from lxml import html
@@ -106,13 +107,13 @@ def login_cas(username, password, cas_param=None):
 
     login_form = {
         'username': username,
-        'password': password,
+        'password': md5(password.encode('utf-8')).hexdigest(),
         'lt': lt,
         '_eventId': 'submit',
         'submit': '登录'
     }
     auth = session.s_post(login_post_url, login_form, referrer=LOGIN_URL, logged_in=False)
-    auth_status = '<SCRIPT LANGUAGE="JavaScript">' in auth.text
+    auth_status = '登录成功' in auth.text
 
     if auth_status:
         return None
